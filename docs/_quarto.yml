@@ -1,0 +1,29 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "fleet"
+  description: "Overview and sync of Git repositories across hosting providers."
+  site-url: "https://m.canouil.dev/fleet"
+  repo-url: "https://github.com/mcanouil/fleet"
+  repo-actions: [issue, edit]
+  navbar:
+    left:
+      - href: index.qmd
+        text: "Home"
+      - href: design.qmd
+        text: "Design"
+    right:
+      - icon: github
+        href: "https://github.com/mcanouil/fleet"
+        aria-label: "GitHub repository"
+  page-footer:
+    left: "© 2026 Mickaël Canouil"
+    right: "Built with [Quarto](https://quarto.org)."
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-copy: true

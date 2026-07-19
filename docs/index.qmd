@@ -1,0 +1,42 @@
+---
+title: "fleet"
+subtitle: "Overview and sync of Git repositories across hosting providers."
+---
+
+Repositories accumulate across hosting providers, and local clones drift away from them.
+Some remotes are never cloned.
+Some clones are abandoned, renamed, or forgotten.
+Forks fall behind their upstream.
+
+`fleet` gives one view of that landscape and safe, scriptable actions to close the gap.
+
+GitHub is the only supported provider for now.
+
+::: {.callout-important}
+
+## Status
+
+Early development.
+
+The command surface is not yet implemented; the repository currently contains the project scaffold only.
+This site documents commands as they land, never before.
+
+:::
+
+## Design goals
+
+- Every capability is a command-line command first, so a person, a script, or an agent can reach any outcome the interactive interface offers.
+- Read-only by default: comparison never mutates a working tree, and every mutating action is explicit and opt-in.
+- Nothing destructive happens implicitly: no force-push, no rebase, and no discarding of local changes.
+- Durable state lives in plain text that can be read, edited, and version-controlled by hand.
+
+## Requirements
+
+- Rust 1.85 or later, for building from source.
+- A `git` binary on `PATH`, which `fleet` shells out to so that existing SSH agents and credential helpers keep working.
+
+## Documentation
+
+- [Design note](design.qmd) covers the provider abstraction and the comparison and sync state machine.
+
+Installation, configuration, and per-command reference pages are added as the corresponding features are implemented.

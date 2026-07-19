@@ -1,0 +1,24 @@
+{
+  "name": "fleet",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends jq && cargo install cargo-mutants --locked",
+  "mounts": [
+    "source=${localEnv:HOME}/Projects,target=/host/Projects,type=bind,readonly",
+    "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind",
+    "source=${localEnv:HOME}/.kata,target=/home/vscode/.kata,type=bind"
+  ],
+  "remoteEnv": {
+    "KATA_HOME": "/home/vscode/.kata"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer", "tamasfe.even-better-toml"],
+      "settings": {
+        "editor.formatOnSave": true
+      }
+    }
+  }
+}
