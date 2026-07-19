@@ -1,0 +1,89 @@
+---
+title: "Design note"
+subtitle: "The provider abstraction, and the state machine behind comparison and sync."
+---
+
+## Scope
+
+This note records the decisions that shape `fleet` and the reasoning behind them.
+It is updated as each phase lands, so it describes what exists rather than what is planned.
+
+## Why shell out to `git`
+
+`fleet` invokes the system `git` binary rather than linking a Git library.
+
+The user's SSH agent, credential helpers, and `git` configuration then apply unchanged, so authentication for clone and fetch needs no separate implementation.
+It also keeps the dependency tree free of native build requirements.
+
+The cost is process spawning per repository, which is mitigated by running the scan in parallel.
+Ahead and behind counts are read from remote-tracking refs with `git rev-list --left-right --count`, so comparison after a fetch needs no network access at all.
+
+## Provider abstraction
+
+The data model is provider-agnostic from the first commit: a repository is identified by `RepoId { provider, owner, name }`, and the metadata structure carries only fields that any provider could reasonably supply.
+
+The `Provider` trait itself is deliberately **not** extracted yet.
+GitHub is implemented concretely behind a module boundary, because a trait designed against a single implementation encodes that implementation's assumptions.
+The trait is extracted when a second provider makes the real shape of the abstraction visible, at which point the differences are evidence rather than guesswork.
+
+Fields a provider cannot supply degrade to absent rather than causing an error.
+
+## GitHub transport
+
+Repository enumeration uses the GraphQL API through a plain HTTP client.
+
+One paginated query per owner returns identity, fork parent, and all surfaced metadata together.
+That keeps request counts low, which is also the cheapest option against the rate limit.
+The REST API is used only where GraphQL is awkward.
+
+Rate limiting is handled by honouring the reset and retry headers with exponential backoff, and by reporting exhaustion with the reset time rather than failing opaquely.
+
+## Comparison state machine
+
+Comparison is a pure function.
+It takes an optional remote repository, an optional local clone, and the upstream relationship, and returns exactly one primary state plus a set of orthogonal flags.
+
+Primary states:
+
+| State | Meaning |
+| --- | --- |
+| `RemoteOnly` | Known to the provider, with no local clone under any configured root. |
+| `LocalOnly` | A local clone whose remote does not resolve to a known remote repository. |
+| `InSync` | The default branch matches its remote-tracking ref. |
+| `Ahead` | Local commits not present on the remote. |
+| `Behind` | Remote commits not present locally, with no local divergence. |
+| `Diverged` | Both sides carry commits the other lacks. |
+
+Flags are orthogonal to the primary state, because a repository can be behind *and* dirty, and both facts matter:
+
+- `dirty`, when the working tree has uncommitted changes.
+- `detached_head`, when no branch is checked out.
+- `fork_behind_upstream`, when the fork's default branch trails its parent.
+
+`LocalOnly` is subdivided by cause, since the remedies differ: the remote was deleted, the remote was renamed or moved, or the owner is simply not in the tracked configuration.
+
+## Sync safety
+
+The safety rules live in the comparison layer, not in the actions.
+Actions ask whether an operation is permitted; they do not decide it.
+
+A fast-forward is offered only when a repository is `Behind`, not `dirty`, and not `detached_head`.
+Every other combination is reported with its reason rather than skipped silently, because a repository that cannot be updated is exactly the one the user needs to know about.
+
+The following never happen implicitly, under any command:
+
+- Force-pushing.
+- Rebasing.
+- Discarding or stashing local changes.
+
+Bulk actions are failure-isolated.
+One repository failing does not abort the batch; each result is captured, a summary is printed, and the process exits non-zero if any repository failed.
+
+## Cache
+
+Provider responses and the local scan are cached as JSON under the platform cache directory, one file per provider and owner plus one for the scan.
+
+Each file carries the time it was fetched and a schema version.
+A version mismatch discards the file rather than attempting migration, since the data is a reproducible cache and not a source of truth.
+
+Cached data stays browsable without network access and is marked as potentially stale, with its age shown.

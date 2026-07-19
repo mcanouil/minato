@@ -1,2 +1,5 @@
 .DS_Store
 *.log
+.kata.local.toml
+/target
+/docs/_site/
