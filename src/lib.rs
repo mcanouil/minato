@@ -4,6 +4,9 @@
 //! comparison, cache, and configuration logic stays reachable from integration
 //! tests in `tests/` rather than only through the process boundary.
 
+pub mod config;
+pub mod model;
+
 use clap::Parser;
 
 /// Overview and sync of Git repositories across hosting providers.
