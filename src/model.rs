@@ -1,12 +1,13 @@
-//! Provider-agnostic types identifying repositories.
+//! Provider-agnostic types identifying and describing repositories.
 //!
-//! Types describing what a provider reports about a repository, and what a
-//! local clone looks like on disk, are defined alongside the code that produces
-//! them, so that their shape is driven by real use rather than guesswork.
+//! Types describing a local clone on disk are defined alongside the scanner
+//! that produces them, so that their shape is driven by real use rather than
+//! guesswork.
 
 use std::fmt;
 use std::str::FromStr;
 
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// How a repository identity is written, quoted in every parse failure.
@@ -246,6 +247,84 @@ impl TryFrom<String> for RepoId {
     fn try_from(text: String) -> Result<Self, Self::Error> {
         text.parse()
     }
+}
+
+/// A repository as a provider reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteRepo {
+    /// Which repository this is.
+    pub id: RepoId,
+
+    /// The default branch, absent when the repository has no commits.
+    pub default_branch: Option<String>,
+
+    /// Whether the repository is private.
+    pub is_private: bool,
+
+    /// Whether the repository is archived, and so never expected to change.
+    pub is_archived: bool,
+
+    /// The repository this one was forked from, when it is a fork.
+    pub upstream: Option<RepoId>,
+
+    /// Everything reported about the repository that is not its identity.
+    pub metadata: Metadata,
+}
+
+impl RemoteRepo {
+    /// Whether this repository is a fork of another.
+    #[must_use]
+    pub const fn is_fork(&self) -> bool {
+        self.upstream.is_some()
+    }
+}
+
+/// What a provider reports about a repository beyond its identity.
+///
+/// Fields a provider does not support are absent rather than zero, so that
+/// "this provider has no discussions" stays distinguishable from "this
+/// repository has no discussions".
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Metadata {
+    /// How many users have starred the repository.
+    pub stars: u32,
+
+    /// How many forks exist.
+    pub forks: u32,
+
+    /// How many issues are open.
+    pub open_issues: u32,
+
+    /// How many pull requests are open.
+    pub open_pull_requests: u32,
+
+    /// How many discussions exist, when the provider supports discussions.
+    pub discussions: Option<u32>,
+
+    /// The most recent release, when there is one.
+    pub latest_release: Option<Release>,
+
+    /// When the repository was last pushed to.
+    pub last_pushed: Option<Timestamp>,
+
+    /// The language the provider considers primary.
+    pub language: Option<String>,
+
+    /// The SPDX identifier of the licence, when one is detected.
+    pub licence: Option<String>,
+}
+
+/// The most recent release of a repository.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Release {
+    /// The tag the release points at.
+    pub tag: String,
+
+    /// When the release was published, absent for a draft.
+    pub published: Option<Timestamp>,
+
+    /// Downloads counted across every asset attached to the release.
+    pub downloads: u64,
 }
 
 #[cfg(test)]
