@@ -10,8 +10,10 @@
     "source=${localEnv:HOME}/.kata,target=/home/vscode/.kata,type=bind"
   ],
   "remoteEnv": {
-    "KATA_HOME": "/home/vscode/.kata"
+    "KATA_HOME": "/home/vscode/.kata",
+    "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}"
   },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
   "customizations": {
     "vscode": {
       "extensions": ["rust-lang.rust-analyzer", "tamasfe.even-better-toml"],
