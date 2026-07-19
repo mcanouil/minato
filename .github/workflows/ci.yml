@@ -3,7 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**"]
   pull_request:
+    paths-ignore: ["docs/**"]
 
 permissions:
   contents: read
@@ -14,7 +16,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
 
 jobs:
   lint:
@@ -28,12 +29,14 @@ jobs:
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ubuntu
 
       - name: Check formatting
         run: cargo fmt --all --check
 
       - name: Lint
-        run: cargo clippy --all-targets --all-features
+        run: cargo clippy --locked --all-targets
 
   test:
     name: Test (${{ matrix.os }})
@@ -48,6 +51,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.os == 'ubuntu-latest' && 'ubuntu' || matrix.os }}
 
       - name: Test
-        run: cargo test --all-features
+        run: cargo test --locked

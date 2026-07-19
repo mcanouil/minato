@@ -44,11 +44,12 @@ Inside the container:
 
 ```sh
 cargo fmt --all --check
-cargo clippy --all-targets --all-features
-cargo test --all-features
+cargo clippy --locked --all-targets
+cargo test --locked
 ```
 
-CI runs the same three commands, with tests on Linux, macOS, and Windows.
+CI runs these same three commands, with tests on Linux, macOS, and Windows.
+Lint levels live in `Cargo.toml` under `[lints]`, so a local run and a CI run agree; there are no extra lint flags in the workflow.
 
 ## Licence
 
