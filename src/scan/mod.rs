@@ -72,15 +72,26 @@ pub struct LocalRepo {
     /// absent when there is no branch or it tracks nothing.
     pub tracking: Option<Tracking>,
 
-    /// Whether the working tree holds uncommitted changes.
+    /// Whether tracked files hold uncommitted changes.
     pub dirty: bool,
+
+    /// Whether the working tree holds files git is not tracking.
+    ///
+    /// Kept apart from [`Self::dirty`] because the two mean different things
+    /// for updating: an untracked file is usually a build artefact and does not
+    /// stand in the way of a fast-forward.
+    pub untracked: bool,
 }
 
 impl LocalRepo {
     /// Whether this clone can be updated without discarding anything.
     ///
-    /// A dirty tree or a detached head means an update would need a decision
-    /// the user has not made, so it is reported rather than attempted.
+    /// Modified tracked files or a detached head mean an update would need a
+    /// decision the user has not made, so it is reported rather than attempted.
+    ///
+    /// Untracked files do not block an update. A fast-forward succeeds with
+    /// them present, and in the one case where it would overwrite one, git
+    /// refuses on its own rather than destroying it.
     #[must_use]
     pub const fn is_updatable(&self) -> bool {
         !self.dirty && matches!(self.head, Head::Branch(_))
@@ -98,17 +109,31 @@ pub fn read(path: &Path) -> Result<LocalRepo, git::GitError> {
     let remote_url = git::run_optional(path, &["remote", "get-url", "origin"]);
 
     let head = read_head(path);
+    let status = git::run(path, &["status", "--porcelain"])?;
 
     Ok(LocalRepo {
         id: remote_url
             .as_deref()
             .and_then(|url| remote_url::parse(url).ok()),
         tracking: read_tracking(path, &head),
-        dirty: !git::run(path, &["status", "--porcelain"])?.is_empty(),
+        dirty: has_tracked_changes(&status),
+        untracked: has_untracked_files(&status),
         head,
         remote_url,
         path: path.to_owned(),
     })
+}
+
+/// Whether `git status --porcelain` reported a change to a tracked file.
+fn has_tracked_changes(status: &str) -> bool {
+    status
+        .lines()
+        .any(|line| !line.trim().is_empty() && !line.starts_with("??"))
+}
+
+/// Whether `git status --porcelain` reported a file git is not tracking.
+fn has_untracked_files(status: &str) -> bool {
+    status.lines().any(|line| line.starts_with("??"))
 }
 
 /// Reads what is checked out.
@@ -298,6 +323,27 @@ mod tests {
             }
             .is_in_sync()
         );
+    }
+
+    #[test]
+    fn separates_a_modified_tracked_file_from_an_untracked_one() {
+        assert!(has_tracked_changes(" M src/main.rs"));
+        assert!(!has_untracked_files(" M src/main.rs"));
+
+        assert!(!has_tracked_changes("?? build.log"));
+        assert!(has_untracked_files("?? build.log"));
+
+        let both = " M src/main.rs\n?? build.log";
+        assert!(has_tracked_changes(both));
+        assert!(has_untracked_files(both));
+
+        assert!(!has_tracked_changes(""));
+        assert!(!has_untracked_files(""));
+    }
+
+    #[test]
+    fn treats_a_staged_addition_as_a_tracked_change() {
+        assert!(has_tracked_changes("A  new.rs"));
     }
 
     #[test]

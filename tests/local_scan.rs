@@ -180,12 +180,38 @@ fn reports_an_uncommitted_change_as_dirty_and_not_updatable() {
 }
 
 #[test]
-fn reports_an_untracked_file_as_dirty() {
+fn does_not_let_an_untracked_file_block_an_update() {
     let pair = clone_pair();
 
-    std::fs::write(pair.clone.join("new.txt"), "new").expect("a file");
+    std::fs::write(pair.clone.join("build.log"), "artefact").expect("a file");
 
-    assert!(scan::read(&pair.clone).expect("a readable clone").dirty);
+    let repository = scan::read(&pair.clone).expect("a readable clone");
+
+    assert!(repository.untracked);
+    assert!(!repository.dirty, "nothing tracked was modified");
+    assert!(
+        repository.is_updatable(),
+        "a stray artefact must not stop a repository being updated forever"
+    );
+}
+
+#[test]
+fn a_fast_forward_really_does_succeed_alongside_an_untracked_file() {
+    let pair = clone_pair();
+
+    commit(&pair.origin, "second");
+    git(&pair.clone, &["fetch", "--quiet"]);
+    std::fs::write(pair.clone.join("build.log"), "artefact").expect("a file");
+
+    assert!(
+        scan::read(&pair.clone)
+            .expect("a readable clone")
+            .is_updatable(),
+        "the scanner should consider this updatable"
+    );
+
+    // And git agrees, which is what makes that judgement correct.
+    git(&pair.clone, &["merge", "--ff-only", "@{upstream}"]);
 }
 
 #[test]
