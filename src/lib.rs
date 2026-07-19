@@ -5,8 +5,10 @@
 //! tests in `tests/` rather than only through the process boundary.
 
 pub mod config;
+pub mod git;
 pub mod github;
 pub mod model;
+pub mod scan;
 
 use clap::Parser;
 
