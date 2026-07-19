@@ -72,6 +72,54 @@ impl RetryPolicy {
     }
 }
 
+/// The longest `fleet` will honour a `Retry-After` before giving up instead.
+///
+/// A secondary limit normally clears in under a minute. A far longer wait is
+/// better reported than slept through, so the user can decide.
+const MAX_RETRY_AFTER: Duration = Duration::from_secs(300);
+
+/// A throttling response, and what it implies about waiting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Throttle {
+    /// How long GitHub asked us to wait, when it said.
+    retry_after: Option<Duration>,
+
+    /// When the limit resets, when GitHub said.
+    reset: Option<Timestamp>,
+
+    /// Whether waiting a short while could plausibly clear it.
+    ///
+    /// A secondary limit clears in seconds, so it is worth retrying. A primary
+    /// limit is an hourly quota, so retrying only wastes the user's time.
+    transient: bool,
+}
+
+impl Throttle {
+    /// How long to wait before the retry following `attempt`, or `None` when
+    /// waiting cannot help.
+    fn delay(self, policy: RetryPolicy, attempt: u32) -> Option<Duration> {
+        if !self.transient {
+            return None;
+        }
+
+        match self.retry_after {
+            Some(requested) if requested > MAX_RETRY_AFTER => None,
+            Some(requested) => Some(requested),
+            None => Some(policy.delay_after(attempt)),
+        }
+    }
+}
+
+/// Why fetching one page did not produce a page.
+#[derive(Debug)]
+enum PageFailure {
+    /// The request was throttled.
+    Throttled(Throttle),
+
+    /// Something else went wrong, and waiting will not help.
+    Failed(GitHubError),
+}
+
 /// Anything that can go wrong talking to GitHub.
 #[derive(Debug, thiserror::Error)]
 pub enum GitHubError {
@@ -95,6 +143,15 @@ pub enum GitHubError {
         account: String,
         /// When the limit resets, when GitHub says.
         reset: Option<Timestamp>,
+    },
+
+    /// The same page cursor came back twice, so following it would not advance.
+    #[error(
+        "GitHub returned the same page cursor twice while listing repositories for `{account}`, so paging would not finish; this usually means a partial outage, so run the command again"
+    )]
+    StalledPagination {
+        /// The account being listed.
+        account: String,
     },
 
     /// No such user or organisation exists, or it is not visible.
@@ -236,13 +293,21 @@ impl GitHubClient {
                 break;
             };
 
+            // A cursor that does not advance would page forever. Failing is
+            // better than hanging, since a hang reports nothing at all.
+            if after.as_deref() == Some(cursor.as_str()) {
+                return Err(GitHubError::StalledPagination {
+                    account: account.login().to_owned(),
+                });
+            }
+
             after = Some(cursor);
         }
 
         Ok(repositories)
     }
 
-    /// Fetches one page, retrying while the rate limit says to.
+    /// Fetches one page, waiting and retrying only when that could help.
     async fn page(
         &self,
         account: &Account,
@@ -251,16 +316,24 @@ impl GitHubClient {
         let mut last_reset = None;
 
         for attempt in 0..self.retry.attempts {
-            match self.page_once(account, after).await {
-                Err(GitHubError::RateLimited { reset, .. }) => {
-                    last_reset = reset;
+            let throttle = match self.page_once(account, after).await {
+                Ok(page) => return Ok(page),
+                Err(PageFailure::Failed(error)) => return Err(error),
+                Err(PageFailure::Throttled(throttle)) => throttle,
+            };
 
-                    if attempt + 1 < self.retry.attempts {
-                        tokio::time::sleep(self.retry.delay_after(attempt)).await;
-                    }
-                }
-                outcome => return outcome,
-            }
+            last_reset = throttle.reset;
+
+            let is_last_attempt = attempt + 1 == self.retry.attempts;
+
+            let Some(delay) = throttle
+                .delay(self.retry, attempt)
+                .filter(|_| !is_last_attempt)
+            else {
+                break;
+            };
+
+            tokio::time::sleep(delay).await;
         }
 
         Err(GitHubError::RateLimited {
@@ -274,7 +347,7 @@ impl GitHubClient {
         &self,
         account: &Account,
         after: Option<&str>,
-    ) -> Result<schema::RepositoryConnection, GitHubError> {
+    ) -> Result<schema::RepositoryConnection, PageFailure> {
         let login = account.login();
 
         let response = self
@@ -287,54 +360,56 @@ impl GitHubClient {
             })
             .send()
             .await
-            .map_err(|source| GitHubError::Transport {
-                account: login.to_owned(),
-                source,
+            .map_err(|source| {
+                PageFailure::Failed(GitHubError::Transport {
+                    account: login.to_owned(),
+                    source,
+                })
             })?;
 
         let status = response.status();
-        let reset = rate_limit_reset(response.headers());
+        let headers = response.headers().clone();
 
         if status == reqwest::StatusCode::UNAUTHORIZED {
-            return Err(GitHubError::Unauthorised {
+            return Err(PageFailure::Failed(GitHubError::Unauthorised {
                 token_source: self.token_source,
-            });
+            }));
         }
 
-        if is_rate_limited(status, response.headers()) {
-            return Err(GitHubError::RateLimited {
-                account: login.to_owned(),
-                reset,
-            });
+        if let Some(throttle) = throttle_from(status, &headers) {
+            return Err(PageFailure::Throttled(throttle));
         }
 
-        let body = response
-            .text()
-            .await
-            .map_err(|source| GitHubError::Transport {
+        let body = response.text().await.map_err(|source| {
+            PageFailure::Failed(GitHubError::Transport {
                 account: login.to_owned(),
                 source,
-            })?;
+            })
+        })?;
 
-        let parsed: Response<RepositoriesData> =
-            serde_json::from_str(&body).map_err(|source| GitHubError::Malformed {
+        let parsed: Response<RepositoriesData> = serde_json::from_str(&body).map_err(|source| {
+            PageFailure::Failed(GitHubError::Malformed {
                 account: login.to_owned(),
                 source,
-            })?;
+            })
+        })?;
 
         if parsed
             .errors
             .iter()
             .any(schema::ResponseError::is_rate_limited)
         {
-            return Err(GitHubError::RateLimited {
-                account: login.to_owned(),
-                reset,
-            });
+            // A limit reported in the body is the hourly GraphQL budget, which
+            // will not clear by waiting a few seconds.
+            return Err(PageFailure::Throttled(Throttle {
+                retry_after: None,
+                reset: rate_limit_reset(&headers),
+                transient: false,
+            }));
         }
 
         if !parsed.errors.is_empty() {
-            return Err(GitHubError::Api {
+            return Err(PageFailure::Failed(GitHubError::Api {
                 account: login.to_owned(),
                 messages: parsed
                     .errors
@@ -342,38 +417,56 @@ impl GitHubClient {
                     .map(|error| error.message.as_str())
                     .collect::<Vec<_>>()
                     .join("; "),
-            });
+            }));
         }
 
         parsed
             .data
             .and_then(|data| data.owner)
             .map(|owner| owner.repositories)
-            .ok_or_else(|| GitHubError::UnknownAccount {
-                account: login.to_owned(),
+            .ok_or_else(|| {
+                PageFailure::Failed(GitHubError::UnknownAccount {
+                    account: login.to_owned(),
+                })
             })
     }
 }
 
-/// Whether a response says the request was throttled.
+/// Classifies a response as throttled, and says whether waiting could help.
 ///
 /// GitHub signals a primary limit with 403 and an exhausted remaining count,
-/// and a secondary limit with 429.
-fn is_rate_limited(status: reqwest::StatusCode, headers: &reqwest::header::HeaderMap) -> bool {
-    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-        return true;
-    }
+/// and a secondary limit with 429 or a `Retry-After`. The distinction matters:
+/// a secondary limit clears in seconds, whereas a primary one is an hourly
+/// quota that no amount of short backoff will outlast.
+fn throttle_from(
+    status: reqwest::StatusCode,
+    headers: &reqwest::header::HeaderMap,
+) -> Option<Throttle> {
+    let retry_after = header_number(headers, "retry-after").map(Duration::from_secs);
+    let reset = rate_limit_reset(headers);
 
-    if status != reqwest::StatusCode::FORBIDDEN {
-        return false;
-    }
+    let quota_exhausted = header_number(headers, "x-ratelimit-remaining") == Some(0);
 
+    let transient = match status {
+        reqwest::StatusCode::TOO_MANY_REQUESTS => true,
+        reqwest::StatusCode::FORBIDDEN if retry_after.is_some() => true,
+        reqwest::StatusCode::FORBIDDEN if quota_exhausted => false,
+        _ => return None,
+    };
+
+    Some(Throttle {
+        retry_after,
+        reset,
+        transient,
+    })
+}
+
+/// Reads a header as a non-negative number.
+fn header_number(headers: &reqwest::header::HeaderMap, name: &str) -> Option<u64> {
     headers
-        .get("x-ratelimit-remaining")
+        .get(name)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<u64>().ok())
-        .is_some_and(|remaining| remaining == 0)
-        || headers.contains_key("retry-after")
 }
 
 /// When GitHub says the limit resets, if it says.
@@ -403,21 +496,34 @@ mod tests {
     }
 
     #[test]
-    fn treats_too_many_requests_as_throttling() {
+    fn treats_too_many_requests_as_throttling_worth_waiting_out() {
         let headers = reqwest::header::HeaderMap::new();
 
-        assert!(is_rate_limited(
-            reqwest::StatusCode::TOO_MANY_REQUESTS,
-            &headers
-        ));
+        let throttle =
+            throttle_from(reqwest::StatusCode::TOO_MANY_REQUESTS, &headers).expect("throttling");
+
+        assert!(
+            throttle.transient,
+            "a secondary limit clears in seconds, so it is worth retrying"
+        );
     }
 
     #[test]
-    fn treats_a_forbidden_response_with_no_quota_left_as_throttling() {
+    fn treats_an_exhausted_quota_as_not_worth_waiting_out() {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert("x-ratelimit-remaining", "0".parse().unwrap());
 
-        assert!(is_rate_limited(reqwest::StatusCode::FORBIDDEN, &headers));
+        let throttle = throttle_from(reqwest::StatusCode::FORBIDDEN, &headers).expect("throttling");
+
+        assert!(
+            !throttle.transient,
+            "an hourly quota will not clear within a few seconds of backoff"
+        );
+        assert_eq!(
+            throttle.delay(RetryPolicy::default(), 0),
+            None,
+            "there is no point sleeping before failing"
+        );
     }
 
     #[test]
@@ -425,10 +531,57 @@ mod tests {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert("x-ratelimit-remaining", "42".parse().unwrap());
 
-        assert!(
-            !is_rate_limited(reqwest::StatusCode::FORBIDDEN, &headers),
+        assert_eq!(
+            throttle_from(reqwest::StatusCode::FORBIDDEN, &headers),
+            None,
             "a forbidden response with quota left is a permissions problem, not throttling"
         );
+    }
+
+    #[test]
+    fn honours_the_wait_github_asks_for() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("retry-after", "42".parse().unwrap());
+
+        let throttle =
+            throttle_from(reqwest::StatusCode::TOO_MANY_REQUESTS, &headers).expect("throttling");
+
+        assert_eq!(
+            throttle.delay(RetryPolicy::default(), 0),
+            Some(Duration::from_secs(42)),
+            "GitHub knows better than a guessed backoff"
+        );
+    }
+
+    #[test]
+    fn refuses_to_sleep_through_an_unreasonably_long_wait() {
+        let throttle = Throttle {
+            retry_after: Some(Duration::from_secs(3600)),
+            reset: None,
+            transient: true,
+        };
+
+        assert_eq!(
+            throttle.delay(RetryPolicy::default(), 0),
+            None,
+            "an hour-long wait should be reported rather than slept through"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_doubling_backoff_when_github_says_nothing() {
+        let throttle = Throttle {
+            retry_after: None,
+            reset: None,
+            transient: true,
+        };
+        let policy = RetryPolicy {
+            attempts: 4,
+            backoff: Duration::from_secs(1),
+        };
+
+        assert_eq!(throttle.delay(policy, 0), Some(Duration::from_secs(1)));
+        assert_eq!(throttle.delay(policy, 2), Some(Duration::from_secs(4)));
     }
 
     #[test]

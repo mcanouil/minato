@@ -264,7 +264,14 @@ pub struct RemoteRepo {
     /// Whether the repository is archived, and so never expected to change.
     pub is_archived: bool,
 
-    /// The repository this one was forked from, when it is a fork.
+    /// Whether the repository is a fork.
+    ///
+    /// This is reported separately from [`Self::upstream`] because a fork whose
+    /// parent has been deleted is still a fork, but has no parent to name.
+    pub is_fork: bool,
+
+    /// The repository this one was forked from, when it is a fork whose parent
+    /// is still visible.
     pub upstream: Option<RepoId>,
 
     /// Everything reported about the repository that is not its identity.
@@ -272,9 +279,11 @@ pub struct RemoteRepo {
 }
 
 impl RemoteRepo {
-    /// Whether this repository is a fork of another.
+    /// Whether this repository can be compared against an upstream.
+    ///
+    /// A fork whose parent was deleted cannot, so being a fork is not enough.
     #[must_use]
-    pub const fn is_fork(&self) -> bool {
+    pub const fn has_upstream(&self) -> bool {
         self.upstream.is_some()
     }
 }

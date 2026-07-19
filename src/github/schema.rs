@@ -31,6 +31,7 @@ query($login: String!, $after: String, $pageSize: Int!, $assetPageSize: Int!) {
         owner { login }
         isPrivate
         isArchived
+        isFork
         defaultBranchRef { name }
         parent { name owner { login } }
         stargazerCount
@@ -140,6 +141,8 @@ pub struct RepositoryNode {
     is_private: bool,
     #[serde(rename = "isArchived")]
     is_archived: bool,
+    #[serde(rename = "isFork")]
+    is_fork: bool,
     #[serde(rename = "defaultBranchRef")]
     default_branch_ref: Option<Ref>,
     parent: Option<Parent>,
@@ -242,6 +245,7 @@ impl From<RepositoryNode> for RemoteRepo {
             default_branch: node.default_branch_ref.map(|reference| reference.name),
             is_private: node.is_private,
             is_archived: node.is_archived,
+            is_fork: node.is_fork,
             upstream: node
                 .parent
                 .map(|parent| RepoId::new(Provider::GitHub, &parent.owner.login, &parent.name)),

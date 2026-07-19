@@ -32,6 +32,7 @@ fn repository(name: &str) -> serde_json::Value {
         "owner": { "login": "mcanouil" },
         "isPrivate": false,
         "isArchived": false,
+        "isFork": false,
         "defaultBranchRef": { "name": "main" },
         "parent": null,
         "stargazerCount": 0,
@@ -71,6 +72,7 @@ async fn reads_every_field_a_repository_reports() {
         "owner": { "login": "McAnouil" },
         "isPrivate": true,
         "isArchived": true,
+        "isFork": true,
         "defaultBranchRef": { "name": "main" },
         "parent": { "name": "Upstream", "owner": { "login": "SomeOrg" } },
         "stargazerCount": 12,
@@ -111,7 +113,8 @@ async fn reads_every_field_a_repository_reports() {
     assert_eq!(repository.default_branch.as_deref(), Some("main"));
     assert!(repository.is_private);
     assert!(repository.is_archived);
-    assert!(repository.is_fork());
+    assert!(repository.is_fork);
+    assert!(repository.has_upstream());
     assert_eq!(
         repository.upstream.as_ref().map(ToString::to_string),
         Some("github:someorg/upstream".to_owned())
@@ -236,15 +239,11 @@ async fn reports_a_rejected_token_without_retrying() {
 }
 
 #[tokio::test]
-async fn retries_a_throttled_request_and_succeeds_when_the_limit_clears() {
+async fn retries_a_secondary_limit_and_succeeds_when_it_clears() {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .respond_with(
-            ResponseTemplate::new(403)
-                .insert_header("x-ratelimit-remaining", "0")
-                .insert_header("x-ratelimit-reset", "1750000000"),
-        )
+        .respond_with(ResponseTemplate::new(429))
         .up_to_n_times(1)
         .expect(1)
         .mount(&server)
@@ -286,7 +285,7 @@ async fn gives_up_on_persistent_throttling_and_names_the_reset_time() {
 }
 
 #[tokio::test]
-async fn treats_a_graphql_rate_limit_error_as_throttling() {
+async fn does_not_retry_a_rate_limit_reported_in_the_body() {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -294,7 +293,7 @@ async fn treats_a_graphql_rate_limit_error_as_throttling() {
             "data": null,
             "errors": [{ "message": "API rate limit exceeded", "type": "RATE_LIMITED" }]
         })))
-        .expect(2)
+        .expect(1)
         .mount(&server)
         .await;
 
@@ -448,5 +447,81 @@ async fn the_query_is_accepted_by_the_real_api() {
     assert!(
         !repositories.is_empty(),
         "the account should report at least one repository"
+    );
+}
+
+#[tokio::test]
+async fn fails_rather_than_paging_forever_when_a_cursor_repeats() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": { "repositoryOwner": { "repositories": {
+                "pageInfo": { "hasNextPage": true, "endCursor": "stuck" },
+                "nodes": []
+            }}}
+        })))
+        .mount(&server)
+        .await;
+
+    let error = tokio::time::timeout(
+        Duration::from_secs(10),
+        client_for(&server).repositories(&Account::new("mcanouil")),
+    )
+    .await
+    .expect("an error rather than a hang")
+    .expect_err("stalled pagination");
+
+    assert!(matches!(error, GitHubError::StalledPagination { .. }));
+}
+
+#[tokio::test]
+async fn does_not_retry_an_exhausted_hourly_quota() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(403)
+                .insert_header("x-ratelimit-remaining", "0")
+                .insert_header("x-ratelimit-reset", "1750000000"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server)
+        .repositories(&Account::new("mcanouil"))
+        .await
+        .expect_err("an immediate failure");
+
+    assert!(matches!(error, GitHubError::RateLimited { .. }));
+    assert!(
+        error.to_string().contains("resets at"),
+        "the error should say when the quota returns, got: {error}"
+    );
+}
+
+#[tokio::test]
+async fn reports_a_fork_whose_parent_was_deleted_as_a_fork_without_an_upstream() {
+    let server = MockServer::start().await;
+
+    let mut node = repository("orphaned");
+    node["isFork"] = json!(true);
+    node["parent"] = json!(null);
+
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page(&[node], None)))
+        .mount(&server)
+        .await;
+
+    let repositories = client_for(&server)
+        .repositories(&Account::new("mcanouil"))
+        .await
+        .expect("a listing");
+
+    assert!(repositories[0].is_fork, "it is still a fork");
+    assert!(
+        !repositories[0].has_upstream(),
+        "but there is no parent left to compare against"
     );
 }
