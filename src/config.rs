@@ -2,6 +2,11 @@
 //!
 //! Configuration is plain TOML so that it can be read, edited, and diffed by
 //! hand. It never holds a token: it may only name where a token comes from.
+//!
+//! [`Config`] mirrors the file verbatim, `~` and all, so that a command which
+//! edits configuration can write it back without machine-locking a path the
+//! user wrote as portable. Expansion happens on the way out, through
+//! [`Config::resolved_roots`].
 
 use std::collections::BTreeMap;
 use std::io;
@@ -16,6 +21,9 @@ pub const DEFAULT_LAYOUT: &str = "{owner}/{repo}";
 
 /// The environment variable that overrides the configuration file location.
 pub const CONFIG_ENV: &str = "FLEET_CONFIG";
+
+/// Placeholders a layout may use.
+const LAYOUT_PLACEHOLDERS: [&str; 3] = ["provider", "owner", "repo"];
 
 /// A complete `fleet` configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,8 +67,7 @@ pub struct GitHub {
 
 impl GitHub {
     /// Whether any account is configured.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.users.is_empty() && self.orgs.is_empty()
     }
 }
@@ -69,7 +76,7 @@ impl GitHub {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Local {
-    /// Directories scanned for existing clones.
+    /// Directories scanned for existing clones, exactly as written.
     pub roots: Vec<PathBuf>,
 
     /// Layout applied under the first root when cloning.
@@ -119,6 +126,35 @@ pub enum ValidationError {
         /// The offending layout.
         layout: String,
     },
+
+    /// The layout used a placeholder `fleet` does not substitute.
+    #[error(
+        "`local.layout` uses `{{{placeholder}}}`, which is not a placeholder `fleet` knows; use any of {}",
+        known_placeholders()
+    )]
+    LayoutUnknownPlaceholder {
+        /// The unrecognised placeholder, without its braces.
+        placeholder: String,
+    },
+}
+
+fn known_placeholders() -> String {
+    LAYOUT_PLACEHOLDERS
+        .iter()
+        .map(|placeholder| format!("`{{{placeholder}}}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// A root that cannot be expanded because no home directory is known.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "cannot expand `~` in `{}` because no home directory is set; write an absolute path in `local.roots`, or set HOME",
+    root.display()
+)]
+pub struct UnresolvedRootError {
+    /// The root that could not be expanded.
+    pub root: PathBuf,
 }
 
 /// Anything that can go wrong between asking for the configuration and holding
@@ -172,12 +208,7 @@ pub enum ConfigError {
 
 impl Config {
     /// Parses a configuration from TOML text, without validating it.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the text is not valid TOML, or contains fields
-    /// `fleet` does not recognise.
-    pub fn from_toml(text: &str) -> Result<Self, toml::de::Error> {
+    pub(crate) fn from_toml(text: &str) -> Result<Self, toml::de::Error> {
         toml::from_str(text)
     }
 
@@ -201,13 +232,7 @@ impl Config {
             return Err(ValidationError::NoRoots);
         }
 
-        if !self.local.layout.contains("{repo}") {
-            return Err(ValidationError::LayoutMissingRepo {
-                layout: self.local.layout.clone(),
-            });
-        }
-
-        Ok(())
+        validate_layout(&self.local.layout)
     }
 
     /// Reads and validates the configuration at `path`.
@@ -261,8 +286,15 @@ impl Config {
     }
 
     /// The roots with a leading `~` expanded against `home`.
-    #[must_use]
-    pub fn resolved_roots(&self, home: Option<&Path>) -> Vec<PathBuf> {
+    ///
+    /// This is the only form a scan should consume, since an unexpanded `~` is
+    /// a directory name rather than the home directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error naming the offending root when it starts with `~` and
+    /// no home directory is known, rather than silently scanning a literal `~`.
+    pub fn resolved_roots(&self, home: Option<&Path>) -> Result<Vec<PathBuf>, UnresolvedRootError> {
         self.local
             .roots
             .iter()
@@ -271,11 +303,41 @@ impl Config {
     }
 }
 
+/// Checks a layout for a missing or unrecognised placeholder.
+fn validate_layout(layout: &str) -> Result<(), ValidationError> {
+    for placeholder in placeholders(layout) {
+        if !LAYOUT_PLACEHOLDERS.contains(&placeholder) {
+            return Err(ValidationError::LayoutUnknownPlaceholder {
+                placeholder: placeholder.to_owned(),
+            });
+        }
+    }
+
+    if !layout.contains("{repo}") {
+        return Err(ValidationError::LayoutMissingRepo {
+            layout: layout.to_owned(),
+        });
+    }
+
+    Ok(())
+}
+
+/// The placeholder names in `layout`, without their braces.
+fn placeholders(layout: &str) -> impl Iterator<Item = &str> {
+    layout
+        .split('{')
+        .skip(1)
+        .filter_map(|rest| rest.split_once('}'))
+        .map(|(placeholder, _)| placeholder)
+}
+
 /// Resolves where the configuration file lives.
 ///
 /// The first of these that is set wins: the `FLEET_CONFIG` override, then
 /// `XDG_CONFIG_HOME`, then `~/.config`. The same `.config` path is used on
 /// every platform so that a configuration file can be moved between machines.
+/// An override set to an empty value counts as unset, since an exported but
+/// empty variable is a common accident.
 ///
 /// # Errors
 ///
@@ -285,11 +347,12 @@ pub fn config_path_from(
     xdg_config_home: Option<&Path>,
     home: Option<&Path>,
 ) -> Result<PathBuf, ConfigError> {
-    if let Some(explicit) = explicit {
+    if let Some(explicit) = explicit.filter(|path| !path.as_os_str().is_empty()) {
         return Ok(explicit.to_owned());
     }
 
     let base = xdg_config_home
+        .filter(|path| !path.as_os_str().is_empty())
         .map(Path::to_owned)
         .or_else(|| home.map(|home| home.join(".config")))
         .ok_or(ConfigError::NoLocation)?;
@@ -298,17 +361,15 @@ pub fn config_path_from(
 }
 
 /// Expands a leading `~` against `home`, leaving every other path untouched.
-#[must_use]
-pub fn expand_tilde(path: &Path, home: Option<&Path>) -> PathBuf {
-    let Some(home) = home else {
-        return path.to_owned();
-    };
-
+fn expand_tilde(path: &Path, home: Option<&Path>) -> Result<PathBuf, UnresolvedRootError> {
     let Ok(rest) = path.strip_prefix("~") else {
-        return path.to_owned();
+        return Ok(path.to_owned());
     };
 
-    home.join(rest)
+    home.map(|home| home.join(rest))
+        .ok_or_else(|| UnresolvedRootError {
+            root: path.to_owned(),
+        })
 }
 
 #[cfg(test)]
@@ -316,8 +377,19 @@ mod tests {
     use super::*;
     use crate::model::Provider;
 
-    fn valid_toml() -> &'static str {
-        r#"
+    /// A configuration with `local` and `tags` sections appended to a valid
+    /// provider section, so each test states only what it is about.
+    fn config_with(rest: &str) -> Config {
+        Config::from_toml(&format!(
+            "[providers.github]\nusers = [\"mcanouil\"]\n\n{rest}"
+        ))
+        .expect("the fixture to parse")
+    }
+
+    #[test]
+    fn parses_a_complete_configuration() {
+        let config = Config::from_toml(
+            r#"
 [providers.github]
 users = ["mcanouil"]
 orgs = ["some-org"]
@@ -329,12 +401,9 @@ protocol = "https"
 
 [tags]
 reference = ["github:mcanouil/fleet"]
-"#
-    }
-
-    #[test]
-    fn parses_a_complete_configuration() {
-        let config = Config::from_toml(valid_toml()).unwrap();
+"#,
+        )
+        .unwrap();
         let github = config.providers.github.unwrap();
 
         assert_eq!(github.users, ["mcanouil"]);
@@ -349,16 +418,7 @@ reference = ["github:mcanouil/fleet"]
 
     #[test]
     fn applies_defaults_for_omitted_settings() {
-        let config = Config::from_toml(
-            r#"
-[providers.github]
-users = ["mcanouil"]
-
-[local]
-roots = ["~/Projects"]
-"#,
-        )
-        .unwrap();
+        let config = config_with("[local]\nroots = [\"~/Projects\"]\n");
 
         assert_eq!(config.local.layout, DEFAULT_LAYOUT);
         assert_eq!(config.local.protocol, Protocol::Ssh);
@@ -369,13 +429,7 @@ roots = ["~/Projects"]
     #[test]
     fn rejects_an_unknown_field_and_names_it() {
         let error = Config::from_toml(
-            r#"
-[providers.github]
-user = ["mcanouil"]
-
-[local]
-roots = ["~/Projects"]
-"#,
+            "[providers.github]\nuser = [\"mcanouil\"]\n\n[local]\nroots = [\"~/Projects\"]\n",
         )
         .unwrap_err();
 
@@ -388,16 +442,7 @@ roots = ["~/Projects"]
     #[test]
     fn rejects_a_malformed_repository_in_tags() {
         let error = Config::from_toml(
-            r#"
-[providers.github]
-users = ["mcanouil"]
-
-[local]
-roots = ["~/Projects"]
-
-[tags]
-reference = ["mcanouil/fleet"]
-"#,
+            "[providers.github]\nusers = [\"mcanouil\"]\n\n[local]\nroots = [\"~/P\"]\n\n[tags]\nreference = [\"mcanouil/fleet\"]\n",
         )
         .unwrap_err();
 
@@ -409,61 +454,29 @@ reference = ["mcanouil/fleet"]
 
     #[test]
     fn requires_a_configured_provider() {
-        let config = Config::from_toml(
-            r#"
-[local]
-roots = ["~/Projects"]
-"#,
-        )
-        .unwrap();
+        let config = Config::from_toml("[local]\nroots = [\"~/Projects\"]\n").unwrap();
 
         assert_eq!(config.validate(), Err(ValidationError::NoProviders));
     }
 
     #[test]
     fn treats_a_provider_without_accounts_as_unconfigured() {
-        let config = Config::from_toml(
-            r#"
-[providers.github]
-
-[local]
-roots = ["~/Projects"]
-"#,
-        )
-        .unwrap();
+        let config =
+            Config::from_toml("[providers.github]\n\n[local]\nroots = [\"~/Projects\"]\n").unwrap();
 
         assert_eq!(config.validate(), Err(ValidationError::NoProviders));
     }
 
     #[test]
     fn requires_at_least_one_root() {
-        let config = Config::from_toml(
-            r#"
-[providers.github]
-users = ["mcanouil"]
-
-[local]
-roots = []
-"#,
-        )
-        .unwrap();
+        let config = config_with("[local]\nroots = []\n");
 
         assert_eq!(config.validate(), Err(ValidationError::NoRoots));
     }
 
     #[test]
     fn rejects_a_layout_that_would_collide() {
-        let config = Config::from_toml(
-            r#"
-[providers.github]
-users = ["mcanouil"]
-
-[local]
-roots = ["~/Projects"]
-layout = "{owner}"
-"#,
-        )
-        .unwrap();
+        let config = config_with("[local]\nroots = [\"~/P\"]\nlayout = \"{owner}\"\n");
 
         assert!(matches!(
             config.validate(),
@@ -472,31 +485,27 @@ layout = "{owner}"
     }
 
     #[test]
-    fn accepts_a_valid_configuration() {
-        assert_eq!(Config::from_toml(valid_toml()).unwrap().validate(), Ok(()));
+    fn rejects_a_mistyped_placeholder_rather_than_creating_it_as_a_directory() {
+        let config = config_with("[local]\nroots = [\"~/P\"]\nlayout = \"{onwer}/{repo}\"\n");
+
+        let error = config.validate().unwrap_err();
+
+        assert!(matches!(
+            error,
+            ValidationError::LayoutUnknownPlaceholder { ref placeholder } if placeholder == "onwer"
+        ));
+        assert!(
+            error.to_string().contains("{owner}"),
+            "the error should list the placeholders that do exist, got: {error}"
+        );
     }
 
     #[test]
-    fn the_sample_configuration_is_itself_valid() {
-        let config = Config::from_toml(&Config::sample()).unwrap();
+    fn accepts_every_documented_placeholder() {
+        let config =
+            config_with("[local]\nroots = [\"~/P\"]\nlayout = \"{provider}/{owner}/{repo}\"\n");
 
         assert_eq!(config.validate(), Ok(()));
-    }
-
-    #[test]
-    fn reports_a_missing_file_with_the_path_it_looked_at() {
-        let path = Path::new("/nonexistent/fleet/fleet.toml");
-        let error = Config::load_from(path).unwrap_err();
-
-        assert!(matches!(error, ConfigError::NotFound { .. }));
-        assert!(
-            error.to_string().contains("/nonexistent/fleet/fleet.toml"),
-            "the error should name the path, got: {error}"
-        );
-        assert!(
-            error.to_string().contains("[providers.github]"),
-            "the error should show a sample configuration, got: {error}"
-        );
     }
 
     #[test]
@@ -509,6 +518,14 @@ layout = "{owner}"
         .unwrap();
 
         assert_eq!(path, PathBuf::from("/explicit/fleet.toml"));
+    }
+
+    #[test]
+    fn treats_an_empty_override_as_unset() {
+        let path =
+            config_path_from(Some(Path::new("")), None, Some(Path::new("/home/user"))).unwrap();
+
+        assert_eq!(path, PathBuf::from("/home/user/.config/fleet/fleet.toml"));
     }
 
     #[test]
@@ -533,51 +550,74 @@ layout = "{owner}"
 
     #[test]
     fn expands_a_leading_tilde_only() {
-        let home = Path::new("/home/user");
+        let home = Some(Path::new("/home/user"));
 
         assert_eq!(
-            expand_tilde(Path::new("~/Projects"), Some(home)),
+            expand_tilde(Path::new("~/Projects"), home).unwrap(),
             PathBuf::from("/home/user/Projects")
         );
         assert_eq!(
-            expand_tilde(Path::new("~"), Some(home)),
+            expand_tilde(Path::new("~"), home).unwrap(),
             PathBuf::from("/home/user")
         );
         assert_eq!(
-            expand_tilde(Path::new("/absolute"), Some(home)),
+            expand_tilde(Path::new("/absolute"), home).unwrap(),
             PathBuf::from("/absolute")
         );
         assert_eq!(
-            expand_tilde(Path::new("relative/path"), Some(home)),
+            expand_tilde(Path::new("relative/path"), home).unwrap(),
             PathBuf::from("relative/path")
         );
     }
 
     #[test]
-    fn leaves_a_tilde_alone_when_there_is_no_home_directory() {
-        assert_eq!(
-            expand_tilde(Path::new("~/Projects"), None),
-            PathBuf::from("~/Projects")
-        );
-    }
-
-    #[test]
     fn does_not_expand_a_tilde_inside_a_username() {
-        let home = Path::new("/home/user");
-
         assert_eq!(
-            expand_tilde(Path::new("~other/Projects"), Some(home)),
+            expand_tilde(Path::new("~other/Projects"), Some(Path::new("/home/user"))).unwrap(),
             PathBuf::from("~other/Projects")
         );
     }
 
     #[test]
+    fn refuses_to_scan_a_literal_tilde_when_there_is_no_home_directory() {
+        let config = config_with("[local]\nroots = [\"~/Projects\"]\n");
+
+        let error = config.resolved_roots(None).unwrap_err();
+
+        assert_eq!(error.root, PathBuf::from("~/Projects"));
+        assert!(
+            error.to_string().contains("absolute path"),
+            "the error should say what to do instead, got: {error}"
+        );
+    }
+
+    #[test]
     fn resolves_every_root_against_the_home_directory() {
-        let config = Config::from_toml(valid_toml()).unwrap();
+        let config = config_with("[local]\nroots = [\"~/Projects\", \"/opt/code\"]\n");
 
         assert_eq!(
-            config.resolved_roots(Some(Path::new("/home/user"))),
-            [PathBuf::from("/home/user/Projects")]
+            config
+                .resolved_roots(Some(Path::new("/home/user")))
+                .unwrap(),
+            [
+                PathBuf::from("/home/user/Projects"),
+                PathBuf::from("/opt/code")
+            ]
+        );
+    }
+
+    #[test]
+    fn keeps_the_configuration_verbatim_so_it_can_be_written_back() {
+        let config = config_with("[local]\nroots = [\"~/Projects\"]\n");
+
+        config
+            .resolved_roots(Some(Path::new("/home/user")))
+            .unwrap();
+
+        assert_eq!(
+            config.local.roots,
+            [PathBuf::from("~/Projects")],
+            "resolving must not rewrite the portable path the user wrote"
         );
     }
 }

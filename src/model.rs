@@ -9,10 +9,16 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
+/// How a repository identity is written, quoted in every parse failure.
+const REPO_ID_FORM: &str = "write it as `provider:owner/name`, for example `github:mcanouil/fleet`";
+
+/// Characters allowed in an owner or a repository name, besides letters and
+/// digits.
+const EXTRA_NAME_CHARACTERS: [char; 3] = ['-', '_', '.'];
+
 /// A repository hosting provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-#[non_exhaustive]
+#[serde(try_from = "String", into = "String")]
 pub enum Provider {
     /// GitHub, at github.com.
     GitHub,
@@ -29,6 +35,15 @@ impl Provider {
             Self::GitHub => "github",
         }
     }
+
+    /// The supported identifiers, for use in error messages.
+    fn supported() -> String {
+        Self::ALL
+            .iter()
+            .map(|provider| provider.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 impl fmt::Display for Provider {
@@ -37,19 +52,20 @@ impl fmt::Display for Provider {
     }
 }
 
-/// A provider name that `fleet` does not recognise.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("unknown provider `{name}`; supported providers: {}", supported())]
-pub struct UnknownProviderError {
-    name: String,
+impl From<Provider> for String {
+    fn from(provider: Provider) -> Self {
+        provider.as_str().to_owned()
+    }
 }
 
-fn supported() -> String {
-    Provider::ALL
-        .iter()
-        .map(|provider| provider.as_str())
-        .collect::<Vec<_>>()
-        .join(", ")
+/// A provider name that `fleet` does not recognise.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "unknown provider `{name}`; supported providers: {}",
+    Provider::supported()
+)]
+pub struct UnknownProviderError {
+    name: String,
 }
 
 impl FromStr for Provider {
@@ -66,36 +82,47 @@ impl FromStr for Provider {
     }
 }
 
+impl TryFrom<String> for Provider {
+    type Error = UnknownProviderError;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        text.parse()
+    }
+}
+
 /// The fully qualified identity of a repository, written `provider:owner/name`.
 ///
 /// The provider is part of the identity because the same `owner/name` pair can
 /// exist on more than one provider and refer to unrelated repositories.
+///
+/// The owner and the name are held in lowercase. GitHub resolves them without
+/// regard to case, so a remote URL reading `McAnouil/Fleet` and an API response
+/// reading `mcanouil/fleet` name the same repository, and an identity used to
+/// match one against the other has to agree. The casing a provider reports is
+/// presentation, and belongs with the metadata rather than the identity.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct RepoId {
     /// The provider hosting the repository.
     pub provider: Provider,
-    /// The user or organisation owning the repository.
+    /// The user or organisation owning the repository, lowercased.
     pub owner: String,
-    /// The repository name, without its owner.
+    /// The repository name without its owner, lowercased.
     pub name: String,
 }
 
 impl RepoId {
-    /// Builds an identity from its parts.
+    /// Builds an identity from its parts, lowercasing the owner and the name.
+    ///
+    /// Prefer parsing when the input comes from a user, since parsing also
+    /// rejects characters that cannot appear in an owner or a name.
     #[must_use]
-    pub fn new(provider: Provider, owner: impl Into<String>, name: impl Into<String>) -> Self {
+    pub fn new(provider: Provider, owner: &str, name: &str) -> Self {
         Self {
             provider,
-            owner: owner.into(),
-            name: name.into(),
+            owner: owner.to_lowercase(),
+            name: name.to_lowercase(),
         }
-    }
-
-    /// The `owner/name` pair, without the provider prefix.
-    #[must_use]
-    pub fn path(&self) -> String {
-        format!("{}/{}", self.owner, self.name)
     }
 }
 
@@ -115,27 +142,28 @@ impl From<RepoId> for String {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseRepoIdError {
     /// The `provider:` prefix was absent.
-    #[error(
-        "repository `{input}` has no provider prefix; write it as `provider:owner/name`, for example `github:mcanouil/fleet`"
-    )]
+    #[error("repository `{input}` has no provider prefix; {REPO_ID_FORM}")]
     MissingProvider {
         /// The text that failed to parse.
         input: String,
     },
 
     /// The `owner/name` separator was absent.
-    #[error(
-        "repository `{input}` has no owner; write it as `provider:owner/name`, for example `github:mcanouil/fleet`"
-    )]
+    #[error("repository `{input}` has no owner; {REPO_ID_FORM}")]
     MissingOwner {
         /// The text that failed to parse.
         input: String,
     },
 
+    /// More than one `/` appeared after the provider.
+    #[error("repository `{input}` has more than one `/` after the provider; {REPO_ID_FORM}")]
+    TooManySeparators {
+        /// The text that failed to parse.
+        input: String,
+    },
+
     /// The owner or the name was empty.
-    #[error(
-        "repository `{input}` has an empty {part}; write it as `provider:owner/name`, for example `github:mcanouil/fleet`"
-    )]
+    #[error("repository `{input}` has an empty {part}; {REPO_ID_FORM}")]
     EmptyPart {
         /// The text that failed to parse.
         input: String,
@@ -143,9 +171,44 @@ pub enum ParseRepoIdError {
         part: &'static str,
     },
 
+    /// The owner or the name held a character that cannot appear in one.
+    #[error(
+        "repository `{input}` has `{character}` in its {part}, which is not allowed; an {part} may hold letters, digits, `-`, `_`, and `.`"
+    )]
+    InvalidCharacter {
+        /// The text that failed to parse.
+        input: String,
+        /// Which part held the character.
+        part: &'static str,
+        /// The offending character.
+        character: char,
+    },
+
     /// The provider prefix was present but not recognised.
     #[error(transparent)]
     UnknownProvider(#[from] UnknownProviderError),
+}
+
+/// Checks that `value` can be an owner or a repository name.
+fn check_part(input: &str, part: &'static str, value: &str) -> Result<(), ParseRepoIdError> {
+    if value.is_empty() {
+        return Err(ParseRepoIdError::EmptyPart {
+            input: input.to_owned(),
+            part,
+        });
+    }
+
+    if let Some(character) = value.chars().find(|character| {
+        !character.is_ascii_alphanumeric() && !EXTRA_NAME_CHARACTERS.contains(character)
+    }) {
+        return Err(ParseRepoIdError::InvalidCharacter {
+            input: input.to_owned(),
+            part,
+            character,
+        });
+    }
+
+    Ok(())
 }
 
 impl FromStr for RepoId {
@@ -164,21 +227,16 @@ impl FromStr for RepoId {
                 input: text.to_owned(),
             })?;
 
-        if owner.is_empty() {
-            return Err(ParseRepoIdError::EmptyPart {
+        if name.contains('/') {
+            return Err(ParseRepoIdError::TooManySeparators {
                 input: text.to_owned(),
-                part: "owner",
             });
         }
 
-        if name.is_empty() || name.contains('/') {
-            return Err(ParseRepoIdError::EmptyPart {
-                input: text.to_owned(),
-                part: "name",
-            });
-        }
+        check_part(text, "owner", owner)?;
+        check_part(text, "name", name)?;
 
-        Ok(Self::new(provider.parse::<Provider>()?, owner, name))
+        Ok(Self::new(provider.trim().parse::<Provider>()?, owner, name))
     }
 }
 
@@ -211,9 +269,30 @@ mod tests {
     }
 
     #[test]
+    fn treats_identities_differing_only_in_case_as_the_same_repository() {
+        let from_api: RepoId = "github:mcanouil/fleet".parse().unwrap();
+        let from_remote_url: RepoId = "github:McAnouil/Fleet".parse().unwrap();
+
+        assert_eq!(
+            from_api, from_remote_url,
+            "a remote URL and an API response naming one repository must produce one identity"
+        );
+        assert_eq!(from_remote_url.to_string(), "github:mcanouil/fleet");
+    }
+
+    #[test]
     fn accepts_a_provider_in_any_case() {
         assert_eq!("GitHub".parse::<Provider>().unwrap(), Provider::GitHub);
         assert_eq!("github".parse::<Provider>().unwrap(), Provider::GitHub);
+    }
+
+    #[test]
+    fn parses_a_provider_the_same_way_through_serde() {
+        for text in ["\"github\"", "\"GitHub\""] {
+            let provider: Provider = serde_json::from_str(text).unwrap();
+
+            assert_eq!(provider, Provider::GitHub);
+        }
     }
 
     #[test]
@@ -247,11 +326,43 @@ mod tests {
     }
 
     #[test]
-    fn rejects_a_name_containing_a_further_slash() {
+    fn reports_an_extra_separator_as_such_rather_than_as_an_empty_name() {
+        let error = "github:mcanouil/fleet/extra".parse::<RepoId>().unwrap_err();
+
+        assert!(matches!(error, ParseRepoIdError::TooManySeparators { .. }));
+        assert!(
+            error.to_string().contains("more than one `/`"),
+            "the error should name the real problem, got: {error}"
+        );
+    }
+
+    #[test]
+    fn rejects_whitespace_around_an_owner_or_a_name() {
+        for text in ["github: mcanouil/fleet", "github:mcanouil/fleet "] {
+            assert!(
+                matches!(
+                    text.parse::<RepoId>(),
+                    Err(ParseRepoIdError::InvalidCharacter { .. })
+                ),
+                "`{text}` should be rejected rather than silently accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_a_stray_colon_in_an_owner() {
         assert!(matches!(
-            "github:mcanouil/fleet/extra".parse::<RepoId>().unwrap_err(),
-            ParseRepoIdError::EmptyPart { part: "name", .. }
+            "github::mcanouil/fleet".parse::<RepoId>().unwrap_err(),
+            ParseRepoIdError::InvalidCharacter { part: "owner", .. }
         ));
+    }
+
+    #[test]
+    fn accepts_the_punctuation_that_appears_in_real_repository_names() {
+        let id: RepoId = "github:my-org/some_repo.rs".parse().unwrap();
+
+        assert_eq!(id.owner, "my-org");
+        assert_eq!(id.name, "some_repo.rs");
     }
 
     #[test]
@@ -263,12 +374,5 @@ mod tests {
             error.to_string().contains("github"),
             "the error should list supported providers, got: {error}"
         );
-    }
-
-    #[test]
-    fn exposes_the_owner_and_name_without_the_provider() {
-        let id = RepoId::new(Provider::GitHub, "mcanouil", "fleet");
-
-        assert_eq!(id.path(), "mcanouil/fleet");
     }
 }
