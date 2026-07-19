@@ -31,21 +31,23 @@ Deployment to GitHub Pages is deferred until the repository is public, since Pag
 
 ## Development
 
-Development happens inside the devcontainer, so no toolchain is required on the host beyond Docker and an editor that supports devcontainers.
-
-```sh
-devcontainer up --workspace-folder .
-```
-
-The container mounts `~/Projects` read-only, so manual runs can see real clones without any risk of the container mutating them.
-Destructive manual checks, such as clone and fast-forward, are done by running the built binary on the host.
-
-Inside the container:
+The three commands below are the whole loop, whether run on the host with a local Rust toolchain or inside the devcontainer.
 
 ```sh
 cargo fmt --all --check
 cargo clippy --locked --all-targets
 cargo test --locked
+```
+
+Tests that reach the network are marked `#[ignore]`, so the default run stays offline and deterministic.
+Run them with `cargo test -- --ignored` after `gh auth login`, which checks the GraphQL query against the real API rather than only against a mock.
+
+A devcontainer is provided in [`.devcontainer/`](.devcontainer), intended to remove the need for a host toolchain.
+It has not been exercised yet, so treat it as unverified until it has been: development so far has run on the host.
+It mounts `~/Projects` read-only, which means manual runs can see real clones without the container being able to mutate them, but also that anything writing to a clone, `git fetch` included, cannot run inside it as currently configured.
+
+```sh
+devcontainer up --workspace-folder .
 ```
 
 CI runs these same three commands, with tests on Linux, macOS, and Windows.
