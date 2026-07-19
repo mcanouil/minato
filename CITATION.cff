@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+title: "Fleet"
+message: "If you use this project, please cite it as below."
+type: software
+authors:
+  - name: "Mickaël Canouil"
+repository-code: "https://github.com/mcanouil/fleet"
+license: MIT
+date-released: "2026-07-19"
