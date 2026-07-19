@@ -96,6 +96,7 @@ impl ResponseError {
 
 /// The `data` payload of the repositories query.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RepositoriesData {
     /// The account, absent when no such user or organisation exists.
     #[serde(rename = "repositoryOwner")]
@@ -104,6 +105,7 @@ pub struct RepositoriesData {
 
 /// The account the query was made against.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RepositoryOwner {
     /// One page of repositories.
     pub repositories: RepositoryConnection,
@@ -111,9 +113,9 @@ pub struct RepositoryOwner {
 
 /// One page of repositories, with the cursor needed to fetch the next.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RepositoryConnection {
     /// Where this page sits in the sequence.
-    #[serde(rename = "pageInfo")]
     pub page_info: PageInfo,
 
     /// The repositories on this page.
@@ -122,103 +124,97 @@ pub struct RepositoryConnection {
 
 /// Whether more pages follow, and where to resume from.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PageInfo {
     /// Whether another page exists.
-    #[serde(rename = "hasNextPage")]
     pub has_next_page: bool,
 
     /// The cursor to pass as `after` for the next page.
-    #[serde(rename = "endCursor")]
     pub end_cursor: Option<String>,
 }
 
 /// A single repository as the query returns it.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RepositoryNode {
     name: String,
     owner: Owner,
-    #[serde(rename = "isPrivate")]
     is_private: bool,
-    #[serde(rename = "isArchived")]
     is_archived: bool,
-    #[serde(rename = "isFork")]
     is_fork: bool,
-    #[serde(rename = "defaultBranchRef")]
     default_branch_ref: Option<Ref>,
     parent: Option<Parent>,
-    #[serde(rename = "stargazerCount")]
     stargazer_count: u32,
-    #[serde(rename = "forkCount")]
     fork_count: u32,
     issues: TotalCount,
-    #[serde(rename = "pullRequests")]
     pull_requests: TotalCount,
     discussions: Option<TotalCount>,
-    #[serde(rename = "pushedAt")]
     pushed_at: Option<Timestamp>,
-    #[serde(rename = "primaryLanguage")]
     primary_language: Option<Named>,
-    #[serde(rename = "licenseInfo")]
     license_info: Option<License>,
     releases: ReleaseConnection,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Owner {
     login: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Ref {
     name: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Parent {
     name: String,
     owner: Owner,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct TotalCount {
-    #[serde(rename = "totalCount")]
     total_count: u32,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Named {
     name: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct License {
-    #[serde(rename = "spdxId")]
     spdx_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ReleaseConnection {
     nodes: Vec<ReleaseNode>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ReleaseNode {
-    #[serde(rename = "tagName")]
     tag_name: String,
-    #[serde(rename = "publishedAt")]
     published_at: Option<Timestamp>,
-    #[serde(rename = "releaseAssets")]
     release_assets: AssetConnection,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AssetConnection {
     nodes: Vec<AssetNode>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AssetNode {
-    #[serde(rename = "downloadCount")]
     download_count: u64,
 }
 

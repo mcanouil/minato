@@ -11,7 +11,7 @@ use std::process::Command;
 ///
 /// The `fleet`-specific variable comes first so that a token scoped to this
 /// tool can override a broader one already exported for something else.
-pub const TOKEN_VARIABLES: [&str; 2] = ["FLEET_GITHUB_TOKEN", "GITHUB_TOKEN"];
+const TOKEN_VARIABLES: [&str; 2] = ["FLEET_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
 /// A GitHub token, which never appears in debug output or error messages.
 #[derive(Clone, PartialEq, Eq)]

@@ -19,7 +19,7 @@ pub use auth::{Token, TokenSource};
 use schema::{RepositoriesData, Response};
 
 /// Where the GraphQL API lives.
-pub const DEFAULT_ENDPOINT: &str = "https://api.github.com/graphql";
+const DEFAULT_ENDPOINT: &str = "https://api.github.com/graphql";
 
 /// How `fleet` identifies itself to the API.
 const USER_AGENT: &str = concat!("fleet/", env!("CARGO_PKG_VERSION"));
@@ -111,6 +111,10 @@ impl Throttle {
 }
 
 /// Why fetching one page did not produce a page.
+///
+/// Throttling is kept apart from every other failure so that the retry loop
+/// decides whether to wait by matching on this, rather than by inspecting the
+/// variants of a general-purpose error.
 #[derive(Debug)]
 enum PageFailure {
     /// The request was throttled.
@@ -118,6 +122,12 @@ enum PageFailure {
 
     /// Something else went wrong, and waiting will not help.
     Failed(GitHubError),
+}
+
+impl From<GitHubError> for PageFailure {
+    fn from(error: GitHubError) -> Self {
+        Self::Failed(error)
+    }
 }
 
 /// Anything that can go wrong talking to GitHub.
@@ -360,32 +370,32 @@ impl GitHubClient {
             })
             .send()
             .await
-            .map_err(|source| {
-                PageFailure::Failed(GitHubError::Transport {
-                    account: login.to_owned(),
-                    source,
-                })
+            .map_err(|source| GitHubError::Transport {
+                account: login.to_owned(),
+                source,
             })?;
 
         let status = response.status();
         let headers = response.headers().clone();
 
         if status == reqwest::StatusCode::UNAUTHORIZED {
-            return Err(PageFailure::Failed(GitHubError::Unauthorised {
+            return Err(GitHubError::Unauthorised {
                 token_source: self.token_source,
-            }));
+            }
+            .into());
         }
 
         if let Some(throttle) = throttle_from(status, &headers) {
             return Err(PageFailure::Throttled(throttle));
         }
 
-        let body = response.text().await.map_err(|source| {
-            PageFailure::Failed(GitHubError::Transport {
+        let body = response
+            .text()
+            .await
+            .map_err(|source| GitHubError::Transport {
                 account: login.to_owned(),
                 source,
-            })
-        })?;
+            })?;
 
         let parsed: Response<RepositoriesData> = serde_json::from_str(&body).map_err(|source| {
             PageFailure::Failed(GitHubError::Malformed {
@@ -409,7 +419,7 @@ impl GitHubClient {
         }
 
         if !parsed.errors.is_empty() {
-            return Err(PageFailure::Failed(GitHubError::Api {
+            return Err(GitHubError::Api {
                 account: login.to_owned(),
                 messages: parsed
                     .errors
@@ -417,7 +427,8 @@ impl GitHubClient {
                     .map(|error| error.message.as_str())
                     .collect::<Vec<_>>()
                     .join("; "),
-            }));
+            }
+            .into());
         }
 
         parsed
@@ -425,9 +436,10 @@ impl GitHubClient {
             .and_then(|data| data.owner)
             .map(|owner| owner.repositories)
             .ok_or_else(|| {
-                PageFailure::Failed(GitHubError::UnknownAccount {
+                GitHubError::UnknownAccount {
                     account: login.to_owned(),
-                })
+                }
+                .into()
             })
     }
 }
