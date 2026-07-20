@@ -10,8 +10,42 @@ GitHub is the only supported provider for now.
 ## Status
 
 Early development.
-The command surface described in the design note is not yet implemented; this repository currently contains the project scaffold only.
+The read-only commands below work; nothing yet clones, fetches, or updates anything.
 Progress is tracked in the local [kata](https://github.com/kenn-io/kata) ledger (`kata list`).
+
+## Configuration
+
+Configuration is TOML at `~/.config/minato/minato.toml`, or wherever `MINATO_CONFIG` points.
+Running `minato doctor` before it exists prints a sample to start from.
+
+```toml
+[providers.github]
+users = ["your-username"]
+orgs = []
+
+[local]
+roots = ["~/Projects"]
+layout = "{owner}/{repo}"
+protocol = "ssh"
+```
+
+A token is never stored here.
+It is read from `MINATO_GITHUB_TOKEN`, then `GITHUB_TOKEN`, then the `gh` CLI, so it stays wherever you already keep it.
+
+## Commands
+
+Every command takes `--json` for scripts and agents, and `--refresh` to ignore cached data.
+
+| Command | What it does |
+| --- | --- |
+| `minato list` | Every repository the provider reports, with stars, issues, pull requests, licence, and when it was last pushed. |
+| `minato status` | How local clones stand against the provider: not cloned, in sync, ahead, behind, diverged, or local only, with the reason. |
+| `minato refresh` | Discards cached data so the next run asks the provider again. |
+| `minato auth status` | Whether a token was found and where it came from, never the token itself. |
+| `minato doctor` | Checks git, the token, configuration, roots, and the cache, reporting all of them rather than stopping at the first problem. |
+
+Provider responses are cached for fifteen minutes.
+Cached output says how old it is, so stale data never passes for fresh, and it stays readable with no network at all.
 
 ## Documentation
 
