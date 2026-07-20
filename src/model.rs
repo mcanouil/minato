@@ -355,6 +355,41 @@ pub struct Metadata {
 
     /// The SPDX identifier of the licence, when one is detected.
     pub licence: Option<String>,
+
+    /// How this fork stands against its parent, absent when it is not a fork,
+    /// the parent is gone, or the provider could not compare them.
+    ///
+    /// Absent means unknown rather than in step, so a fork whose parent was
+    /// deleted is never reported as up to date with something that is not
+    /// there.
+    pub upstream: Option<UpstreamStanding>,
+}
+
+/// How a fork stands against the repository it was forked from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpstreamStanding {
+    /// Commits the fork has that the parent does not.
+    pub ahead: u32,
+
+    /// Commits the parent has that the fork does not.
+    pub behind: u32,
+}
+
+impl UpstreamStanding {
+    /// Whether the fork trails its parent.
+    #[must_use]
+    pub const fn is_behind(self) -> bool {
+        self.behind > 0
+    }
+
+    /// Whether the fork can be brought level by fast-forwarding.
+    ///
+    /// A fork holding its own commits cannot: catching up would mean a merge
+    /// or a rebase, which is a decision rather than an update.
+    #[must_use]
+    pub const fn can_fast_forward(self) -> bool {
+        self.behind > 0 && self.ahead == 0
+    }
 }
 
 /// The most recent release of a repository.

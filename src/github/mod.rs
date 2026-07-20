@@ -12,7 +12,7 @@ use std::time::Duration;
 use jiff::Timestamp;
 use serde::Serialize;
 
-use crate::model::RemoteRepo;
+use crate::model::{RemoteRepo, UpstreamStanding};
 
 pub use auth::{Token, TokenSource};
 
@@ -20,6 +20,12 @@ use schema::{RepositoriesData, Response};
 
 /// Where the GraphQL API lives.
 const DEFAULT_ENDPOINT: &str = "https://api.github.com/graphql";
+
+/// How many forks to compare in one request.
+///
+/// Each costs an alias in a single query, so batching keeps a page of forks to
+/// one round trip without building a request large enough to be rejected.
+const COMPARISON_BATCH: usize = 50;
 
 /// How `minato` identifies itself to the API.
 const USER_AGENT: &str = concat!("minato/", env!("CARGO_PKG_VERSION"));
@@ -299,11 +305,17 @@ impl GitHubClient {
     /// response cannot be understood. Every variant names the account.
     pub async fn repositories(&self, account: &Account) -> Result<Vec<RemoteRepo>, GitHubError> {
         let mut repositories = Vec::new();
+        let mut forks = Vec::new();
         let mut after: Option<String> = None;
 
         loop {
             let page = self.page(account, after.as_deref()).await?;
 
+            forks.extend(
+                page.nodes
+                    .iter()
+                    .filter_map(schema::RepositoryNode::fork_comparison),
+            );
             repositories.extend(page.nodes.into_iter().map(RemoteRepo::from));
 
             if !page.page_info.has_next_page {
@@ -325,7 +337,98 @@ impl GitHubClient {
             after = Some(cursor);
         }
 
+        self.fill_upstream_standing(account, &forks, &mut repositories)
+            .await;
+
         Ok(repositories)
+    }
+
+    /// Asks how each fork stands against its parent, in batches.
+    ///
+    /// Failure here is deliberately not fatal. Knowing how a fork stands is
+    /// worth having, but not at the cost of losing a listing that is otherwise
+    /// complete, so an unanswerable comparison leaves the standing unknown.
+    async fn fill_upstream_standing(
+        &self,
+        account: &Account,
+        forks: &[schema::ForkComparison],
+        repositories: &mut [RemoteRepo],
+    ) {
+        for batch in forks.chunks(COMPARISON_BATCH) {
+            let Ok(compared) = self.compare_forks(account, batch).await else {
+                continue;
+            };
+
+            for (fork, standing) in batch.iter().zip(compared) {
+                let Some(standing) = standing else { continue };
+
+                if let Some(repository) = repositories
+                    .iter_mut()
+                    .find(|repository| repository.id == fork.id)
+                {
+                    repository.metadata.upstream = Some(standing);
+                }
+            }
+        }
+    }
+
+    /// Compares one batch of forks, returning a standing per fork in order.
+    async fn compare_forks(
+        &self,
+        account: &Account,
+        forks: &[schema::ForkComparison],
+    ) -> Result<Vec<Option<UpstreamStanding>>, GitHubError> {
+        let login = account.login();
+
+        let response = self
+            .http
+            .post(&self.endpoint)
+            .bearer_auth(self.token.expose())
+            .json(&Request {
+                query: &schema::comparison_query(forks),
+                variables: serde_json::Value::Null,
+            })
+            .send()
+            .await
+            .map_err(|source| GitHubError::Transport {
+                account: login.to_owned(),
+                source,
+            })?;
+
+        let body = response
+            .text()
+            .await
+            .map_err(|source| GitHubError::Transport {
+                account: login.to_owned(),
+                source,
+            })?;
+
+        let parsed: Response<std::collections::BTreeMap<String, Option<schema::ComparisonNode>>> =
+            serde_json::from_str(&body).map_err(|source| GitHubError::Malformed {
+                account: login.to_owned(),
+                source,
+            })?;
+
+        let data = parsed.data.unwrap_or_default();
+
+        Ok((0..forks.len())
+            .map(|index| {
+                data.get(&format!("f{index}"))
+                    .and_then(Option::as_ref)
+                    .and_then(|node| node.default_branch_ref.as_ref())
+                    .and_then(|reference| reference.compare)
+                    .map(|compared| UpstreamStanding {
+                        // The comparison runs from the fork's branch to the
+                        // parent's, so GitHub's aheadBy counts commits the
+                        // parent holds that the fork lacks. From the fork's
+                        // point of view that is being behind, and the two
+                        // therefore swap. Verified against the REST compare
+                        // API, which agrees.
+                        ahead: compared.behind_by,
+                        behind: compared.ahead_by,
+                    })
+            })
+            .collect())
     }
 
     /// Fetches one page, waiting and retrying only when that could help.

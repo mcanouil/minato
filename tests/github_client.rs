@@ -592,3 +592,81 @@ async fn an_unexpected_status_names_the_status_rather_than_the_body() {
         "the error should name the status, got: {error}"
     );
 }
+
+#[tokio::test]
+async fn a_fork_behind_its_parent_is_reported_as_behind_not_ahead() {
+    let server = MockServer::start().await;
+
+    let mut fork = repository("pandoc");
+    fork["isFork"] = json!(true);
+    fork["parent"] = json!({
+        "name": "pandoc",
+        "owner": { "login": "jgm" },
+        "defaultBranchRef": { "name": "main" }
+    });
+
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            let body: serde_json::Value = request.body_json().expect("a GraphQL request");
+            let query = body["query"].as_str().unwrap_or_default();
+
+            // The second request is the batched fork comparison.
+            if query.contains("compare") {
+                // GitHub reports the parent as 429 ahead of the fork.
+                return ResponseTemplate::new(200).set_body_json(json!({
+                    "data": {
+                        "f0": { "defaultBranchRef": { "compare": { "aheadBy": 429, "behindBy": 0 } } }
+                    }
+                }));
+            }
+
+            ResponseTemplate::new(200).set_body_json(page(&[fork.clone()], None))
+        })
+        .mount(&server)
+        .await;
+
+    let repositories = client_for(&server)
+        .repositories(&Account::new("mcanouil"))
+        .await
+        .expect("a listing");
+
+    let upstream = repositories[0]
+        .metadata
+        .upstream
+        .expect("a comparison against the parent");
+
+    assert_eq!(
+        upstream.behind, 429,
+        "the parent being ahead means the fork is behind"
+    );
+    assert_eq!(upstream.ahead, 0);
+    assert!(upstream.is_behind());
+    assert!(
+        upstream.can_fast_forward(),
+        "a fork with no commits of its own can simply catch up"
+    );
+}
+
+#[tokio::test]
+async fn a_fork_that_cannot_be_compared_is_unknown_rather_than_level() {
+    let server = MockServer::start().await;
+
+    let mut fork = repository("orphaned");
+    fork["isFork"] = json!(true);
+    fork["parent"] = json!(null);
+
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page(&[fork], None)))
+        .mount(&server)
+        .await;
+
+    let repositories = client_for(&server)
+        .repositories(&Account::new("mcanouil"))
+        .await
+        .expect("a listing");
+
+    assert_eq!(
+        repositories[0].metadata.upstream, None,
+        "a fork with no visible parent must not look up to date with it"
+    );
+}

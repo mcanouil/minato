@@ -144,6 +144,10 @@ pub struct Comparison {
 
     /// Facts the provider reported, absent when it reported nothing.
     pub remote: Option<RemoteFlags>,
+
+    /// How this fork stands against its parent, absent when it is not a fork
+    /// or the two could not be compared.
+    pub upstream: Option<crate::model::UpstreamStanding>,
 }
 
 impl Comparison {
@@ -247,6 +251,7 @@ pub fn compare(
                 path: None,
                 group: None,
                 state: State::RemoteOnly,
+                upstream: remote.metadata.upstream,
                 local: None,
                 remote: Some(remote_flags(remote)),
             });
@@ -275,6 +280,7 @@ fn compare_one(
         path: Some(local.path.clone()),
         group: local.group.clone(),
         state: state_for(local, remote, tracked),
+        upstream: remote.and_then(|remote| remote.metadata.upstream),
         local: Some(LocalFlags {
             dirty: local.dirty,
             untracked: local.untracked,

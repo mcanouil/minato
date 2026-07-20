@@ -361,6 +361,7 @@ fn cloning_refuses_to_write_into_an_occupied_destination() {
         path: None,
         group: None,
         state: compare::State::RemoteOnly,
+        upstream: None,
         local: None,
         remote: None,
     };

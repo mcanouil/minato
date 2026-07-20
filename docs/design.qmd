@@ -71,8 +71,15 @@ Treating the two alike would mark a repository unupdatable for as long as a stra
 That last case covers deletion, renaming, and a repository turning private.
 These are not told apart, because nothing gathered so far can distinguish them: doing so needs the provider's stable repository identifier, which is not yet fetched.
 
-`fork_behind_upstream` is not implemented.
-Knowing whether a fork trails its parent means comparing the two default branches, and the parent's branch tip is not among the data currently fetched.
+How a fork stands against its parent is reported where the provider can say.
+It is asked for in a second, batched request covering a page of forks at once, because the parent's default branch is only known once the first answer has arrived.
+
+The two counts are deliberately swapped on the way in.
+The comparison runs from the fork's branch to the parent's, so the provider's "ahead" counts commits the parent holds that the fork lacks, which from the fork's point of view is being behind.
+This was checked against the REST comparison endpoint rather than inferred, after a fork of a busy upstream was reported as hundreds of commits ahead of it.
+
+An unanswerable comparison leaves the standing absent rather than level, so a fork whose parent has been deleted is never reported as up to date with something that is no longer there.
+Failure to compare is not fatal: a listing that is otherwise complete is worth more than losing it over a detail.
 
 ## Sync safety
 

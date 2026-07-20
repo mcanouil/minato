@@ -283,6 +283,7 @@ mod tests {
             ))),
             group: group.map(ToOwned::to_owned),
             state,
+            upstream: None,
             local: None,
             remote: None,
         }
