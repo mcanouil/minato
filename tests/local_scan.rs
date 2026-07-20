@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use fleet::scan::{self, Head};
+use minato::scan::{self, Head};
 
 /// Runs `git` in `directory`, panicking with its output when it fails.
 fn git(directory: &Path, arguments: &[&str]) -> String {
@@ -262,7 +262,7 @@ fn recovers_the_identity_from_a_recognised_remote() {
             "remote",
             "set-url",
             "origin",
-            "git@github.com:McAnouil/Fleet.git",
+            "git@github.com:McAnouil/Minato.git",
         ],
     );
 
@@ -270,7 +270,7 @@ fn recovers_the_identity_from_a_recognised_remote() {
 
     assert_eq!(
         repository.id.expect("an identity").to_string(),
-        "github:mcanouil/fleet"
+        "github:mcanouil/minato"
     );
 }
 

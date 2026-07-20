@@ -1,6 +1,6 @@
 //! Running `git`.
 //!
-//! `fleet` shells out to the system `git` rather than linking a git library, so
+//! `minato` shells out to the system `git` rather than linking a git library, so
 //! that the user's SSH agent, credential helpers, and configuration apply
 //! unchanged. Nothing here mutates a working tree.
 

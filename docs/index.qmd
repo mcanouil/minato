@@ -1,5 +1,5 @@
 ---
-title: "fleet"
+title: "minato"
 subtitle: "Overview and sync of Git repositories across hosting providers."
 ---
 
@@ -8,7 +8,7 @@ Some remotes are never cloned.
 Some clones are abandoned, renamed, or forgotten.
 Forks fall behind their upstream.
 
-`fleet` gives one view of that landscape and safe, scriptable actions to close the gap.
+`minato` gives one view of that landscape and safe, scriptable actions to close the gap.
 
 GitHub is the only supported provider for now.
 
@@ -33,7 +33,7 @@ This site documents commands as they land, never before.
 ## Requirements
 
 - Rust 1.85 or later, for building from source.
-- A `git` binary on `PATH`, which `fleet` shells out to so that existing SSH agents and credential helpers keep working.
+- A `git` binary on `PATH`, which `minato` shells out to so that existing SSH agents and credential helpers keep working.
 
 ## Documentation
 

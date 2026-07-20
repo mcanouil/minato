@@ -1,6 +1,6 @@
 //! Finding a GitHub token without ever storing one.
 //!
-//! `fleet` never writes a token to its configuration. It reads one from the
+//! `minato` never writes a token to its configuration. It reads one from the
 //! environment, or borrows the one the `gh` CLI already holds, so that a token
 //! lives wherever the user already chose to keep it.
 
@@ -9,9 +9,9 @@ use std::process::Command;
 
 /// Environment variables consulted for a token, in order.
 ///
-/// The `fleet`-specific variable comes first so that a token scoped to this
+/// The `minato`-specific variable comes first so that a token scoped to this
 /// tool can override a broader one already exported for something else.
-const TOKEN_VARIABLES: [&str; 2] = ["FLEET_GITHUB_TOKEN", "GITHUB_TOKEN"];
+const TOKEN_VARIABLES: [&str; 2] = ["MINATO_GITHUB_TOKEN", "GITHUB_TOKEN"];
 
 /// A GitHub token, which never appears in debug output or error messages.
 #[derive(Clone, PartialEq, Eq)]
@@ -58,7 +58,7 @@ impl fmt::Display for TokenSource {
     }
 }
 
-/// No token could be found anywhere `fleet` looks.
+/// No token could be found anywhere `minato` looks.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "no GitHub token found; run `gh auth login` to sign in with the gh CLI, or set {} to a personal access token with the `repo` scope",
@@ -120,15 +120,15 @@ mod tests {
     }
 
     #[test]
-    fn prefers_the_fleet_variable_over_the_general_one() {
+    fn prefers_the_minato_variable_over_the_general_one() {
         let (token, source) = resolve_token(
             |name| Some(format!("token-for-{name}")),
             || Some("gh-token".to_owned()),
         )
         .unwrap();
 
-        assert_eq!(token.expose(), "token-for-FLEET_GITHUB_TOKEN");
-        assert_eq!(source, TokenSource::Environment("FLEET_GITHUB_TOKEN"));
+        assert_eq!(token.expose(), "token-for-MINATO_GITHUB_TOKEN");
+        assert_eq!(source, TokenSource::Environment("MINATO_GITHUB_TOKEN"));
     }
 
     #[test]
@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn ignores_a_variable_that_is_set_but_empty() {
         let (token, source) = resolve_token(
-            |name| (name == "FLEET_GITHUB_TOKEN").then(|| "   ".to_owned()),
+            |name| (name == "MINATO_GITHUB_TOKEN").then(|| "   ".to_owned()),
             || Some("gh-token".to_owned()),
         )
         .unwrap();
@@ -179,7 +179,7 @@ mod tests {
         let error = resolve_token(no_variables, || None).unwrap_err();
 
         assert!(error.to_string().contains("gh auth login"));
-        assert!(error.to_string().contains("FLEET_GITHUB_TOKEN"));
+        assert!(error.to_string().contains("MINATO_GITHUB_TOKEN"));
     }
 
     #[test]

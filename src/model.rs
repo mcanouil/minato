@@ -11,7 +11,8 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// How a repository identity is written, quoted in every parse failure.
-const REPO_ID_FORM: &str = "write it as `provider:owner/name`, for example `github:mcanouil/fleet`";
+const REPO_ID_FORM: &str =
+    "write it as `provider:owner/name`, for example `github:mcanouil/minato`";
 
 /// Characters allowed in an owner or a repository name, besides letters and
 /// digits.
@@ -26,7 +27,7 @@ pub enum Provider {
 }
 
 impl Provider {
-    /// Every provider `fleet` can talk to.
+    /// Every provider `minato` can talk to.
     pub const ALL: &'static [Self] = &[Self::GitHub];
 
     /// The lowercase identifier used in configuration and on the command line.
@@ -59,7 +60,7 @@ impl From<Provider> for String {
     }
 }
 
-/// A provider name that `fleet` does not recognise.
+/// A provider name that `minato` does not recognise.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "unknown provider `{name}`; supported providers: {}",
@@ -97,8 +98,8 @@ impl TryFrom<String> for Provider {
 /// exist on more than one provider and refer to unrelated repositories.
 ///
 /// The owner and the name are held in lowercase. GitHub resolves them without
-/// regard to case, so a remote URL reading `McAnouil/Fleet` and an API response
-/// reading `mcanouil/fleet` name the same repository, and an identity used to
+/// regard to case, so a remote URL reading `McAnouil/Minato` and an API response
+/// reading `mcanouil/minato` name the same repository, and an identity used to
 /// match one against the other has to agree. The casing a provider reports is
 /// presentation, and belongs with the metadata rather than the identity.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -342,30 +343,30 @@ mod tests {
 
     #[test]
     fn parses_a_fully_qualified_identity() {
-        let id: RepoId = "github:mcanouil/fleet".parse().unwrap();
+        let id: RepoId = "github:mcanouil/minato".parse().unwrap();
 
         assert_eq!(id.provider, Provider::GitHub);
         assert_eq!(id.owner, "mcanouil");
-        assert_eq!(id.name, "fleet");
+        assert_eq!(id.name, "minato");
     }
 
     #[test]
     fn round_trips_through_its_text_form() {
-        let text = "github:mcanouil/fleet";
+        let text = "github:mcanouil/minato";
 
         assert_eq!(text.parse::<RepoId>().unwrap().to_string(), text);
     }
 
     #[test]
     fn treats_identities_differing_only_in_case_as_the_same_repository() {
-        let from_api: RepoId = "github:mcanouil/fleet".parse().unwrap();
-        let from_remote_url: RepoId = "github:McAnouil/Fleet".parse().unwrap();
+        let from_api: RepoId = "github:mcanouil/minato".parse().unwrap();
+        let from_remote_url: RepoId = "github:McAnouil/Minato".parse().unwrap();
 
         assert_eq!(
             from_api, from_remote_url,
             "a remote URL and an API response naming one repository must produce one identity"
         );
-        assert_eq!(from_remote_url.to_string(), "github:mcanouil/fleet");
+        assert_eq!(from_remote_url.to_string(), "github:mcanouil/minato");
     }
 
     #[test]
@@ -385,18 +386,18 @@ mod tests {
 
     #[test]
     fn rejects_an_identity_without_a_provider() {
-        let error = "mcanouil/fleet".parse::<RepoId>().unwrap_err();
+        let error = "mcanouil/minato".parse::<RepoId>().unwrap_err();
 
         assert!(matches!(error, ParseRepoIdError::MissingProvider { .. }));
         assert!(
-            error.to_string().contains("github:mcanouil/fleet"),
+            error.to_string().contains("github:mcanouil/minato"),
             "the error should show the expected form, got: {error}"
         );
     }
 
     #[test]
     fn rejects_an_identity_without_an_owner() {
-        let error = "github:fleet".parse::<RepoId>().unwrap_err();
+        let error = "github:minato".parse::<RepoId>().unwrap_err();
 
         assert!(matches!(error, ParseRepoIdError::MissingOwner { .. }));
     }
@@ -404,7 +405,7 @@ mod tests {
     #[test]
     fn rejects_empty_owner_or_name() {
         assert!(matches!(
-            "github:/fleet".parse::<RepoId>().unwrap_err(),
+            "github:/minato".parse::<RepoId>().unwrap_err(),
             ParseRepoIdError::EmptyPart { part: "owner", .. }
         ));
         assert!(matches!(
@@ -415,7 +416,9 @@ mod tests {
 
     #[test]
     fn reports_an_extra_separator_as_such_rather_than_as_an_empty_name() {
-        let error = "github:mcanouil/fleet/extra".parse::<RepoId>().unwrap_err();
+        let error = "github:mcanouil/minato/extra"
+            .parse::<RepoId>()
+            .unwrap_err();
 
         assert!(matches!(error, ParseRepoIdError::TooManySeparators { .. }));
         assert!(
@@ -426,7 +429,7 @@ mod tests {
 
     #[test]
     fn rejects_whitespace_around_an_owner_or_a_name() {
-        for text in ["github: mcanouil/fleet", "github:mcanouil/fleet "] {
+        for text in ["github: mcanouil/minato", "github:mcanouil/minato "] {
             assert!(
                 matches!(
                     text.parse::<RepoId>(),
@@ -440,7 +443,7 @@ mod tests {
     #[test]
     fn rejects_a_stray_colon_in_an_owner() {
         assert!(matches!(
-            "github::mcanouil/fleet".parse::<RepoId>().unwrap_err(),
+            "github::mcanouil/minato".parse::<RepoId>().unwrap_err(),
             ParseRepoIdError::InvalidCharacter { part: "owner", .. }
         ));
     }
@@ -455,7 +458,7 @@ mod tests {
 
     #[test]
     fn rejects_an_unknown_provider_and_lists_the_supported_ones() {
-        let error = "gitlab:mcanouil/fleet".parse::<RepoId>().unwrap_err();
+        let error = "gitlab:mcanouil/minato".parse::<RepoId>().unwrap_err();
 
         assert!(matches!(error, ParseRepoIdError::UnknownProvider(_)));
         assert!(
