@@ -51,6 +51,13 @@ pub enum Command {
 
     /// Clone repositories that have no local copy.
     Clone {
+        /// Where to put them. Defaults to the first configured root.
+        ///
+        /// Where a repository belongs is a judgement its identity does not
+        /// carry, so it is chosen here rather than derived.
+        #[arg(long, value_name = "DIRECTORY")]
+        into: Option<PathBuf>,
+
         /// Report what would be cloned, and change nothing.
         #[arg(long)]
         dry_run: bool,
@@ -165,8 +172,20 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
         Command::Refresh => refresh(cli.json).map(Into::into),
         Command::List => list(cli).await.map(Into::into),
         Command::Status => status(cli).await.map(Into::into),
-        Command::Clone { dry_run, shallow } => {
-            act(cli, Act::Clone { shallow: *shallow }, mode(*dry_run)).await
+        Command::Clone {
+            into,
+            dry_run,
+            shallow,
+        } => {
+            act(
+                cli,
+                Act::Clone {
+                    into: into.clone(),
+                    shallow: *shallow,
+                },
+                mode(*dry_run),
+            )
+            .await
         }
         Command::Fetch { dry_run } => act(cli, Act::Fetch, mode(*dry_run)).await,
         Command::Update { dry_run } => act(cli, Act::Update, mode(*dry_run)).await,
@@ -175,7 +194,10 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
 
 /// Which action to carry out.
 enum Act {
-    Clone { shallow: bool },
+    Clone {
+        into: Option<PathBuf>,
+        shallow: bool,
+    },
     Fetch,
     Update,
 }
@@ -198,10 +220,16 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
     let comparisons = compare::compare(&gathered.remotes, &scanned.repositories, &gathered.tracked);
 
     let summary = match action {
-        Act::Clone { shallow } => {
-            let root = roots.first().ok_or(config::ValidationError::NoRoots)?;
+        Act::Clone { into, shallow } => {
+            let destination = match into {
+                Some(into) => into,
+                None => roots
+                    .first()
+                    .cloned()
+                    .ok_or(config::ValidationError::NoRoots)?,
+            };
 
-            actions::clone_missing(&comparisons, root, &config.local, shallow, mode)
+            actions::clone_missing(&comparisons, &destination, &config.local, shallow, mode)
         }
         Act::Fetch => actions::fetch_all(&comparisons, mode),
         Act::Update => actions::update_all(&comparisons, mode),
@@ -688,6 +716,29 @@ mod tests {
             describe_state(&State::LocalOnly(LocalOnlyReason::MissingRemotely)),
             "local only, gone from GitHub"
         );
+    }
+
+    #[test]
+    fn clone_accepts_a_chosen_destination() {
+        let parsed = Cli::try_parse_from(["minato", "clone", "--into", "/code/perso"])
+            .expect("the command to parse");
+
+        let Command::Clone { into, .. } = parsed.command else {
+            panic!("expected the clone command");
+        };
+
+        assert_eq!(into, Some(PathBuf::from("/code/perso")));
+    }
+
+    #[test]
+    fn clone_falls_back_to_the_configured_root() {
+        let parsed = Cli::try_parse_from(["minato", "clone"]).expect("the command to parse");
+
+        let Command::Clone { into, .. } = parsed.command else {
+            panic!("expected the clone command");
+        };
+
+        assert_eq!(into, None, "no destination means use the configured root");
     }
 
     #[test]

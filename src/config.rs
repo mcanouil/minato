@@ -16,8 +16,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::RepoId;
 
-/// Directory layout applied under a root when cloning, unless overridden.
-pub const DEFAULT_LAYOUT: &str = "{owner}/{repo}";
+/// Directory layout applied beneath the directory a clone is placed in.
+///
+/// The default is a flat name, because where a repository belongs is a human
+/// judgement that its identity does not carry. A clone is filed under a chosen
+/// directory, not under a tree derived from its owner.
+pub const DEFAULT_LAYOUT: &str = "{repo}";
 
 /// The environment variable that overrides the configuration file location.
 pub const CONFIG_ENV: &str = "MINATO_CONFIG";
@@ -79,7 +83,7 @@ pub struct Local {
     /// Directories scanned for existing clones, exactly as written.
     pub roots: Vec<PathBuf>,
 
-    /// Layout applied under the first root when cloning.
+    /// Layout applied beneath the directory a clone is placed in.
     #[serde(default = "default_layout")]
     pub layout: String,
 
