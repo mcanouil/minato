@@ -38,6 +38,14 @@ impl Provider {
         }
     }
 
+    /// The host this provider is reached at.
+    #[must_use]
+    pub const fn host(self) -> &'static str {
+        match self {
+            Self::GitHub => "github.com",
+        }
+    }
+
     /// The supported identifiers, for use in error messages.
     fn supported() -> String {
         Self::ALL
@@ -126,6 +134,31 @@ impl RepoId {
             name: name.to_lowercase(),
         }
     }
+}
+
+impl RepoId {
+    /// The URL a clone of this repository is made from.
+    #[must_use]
+    pub fn clone_url(&self, protocol: CloneProtocol) -> String {
+        let host = self.provider.host();
+
+        match protocol {
+            CloneProtocol::Ssh => format!("git@{host}:{}/{}.git", self.owner, self.name),
+            CloneProtocol::Https => format!("https://{host}/{}/{}.git", self.owner, self.name),
+        }
+    }
+}
+
+/// How a clone is made.
+///
+/// This mirrors the configured protocol, kept here so that building a URL does
+/// not depend on the configuration types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloneProtocol {
+    /// Over SSH, using the existing agent.
+    Ssh,
+    /// Over HTTPS, using the existing credential helper.
+    Https,
 }
 
 impl fmt::Display for RepoId {
@@ -454,6 +487,36 @@ mod tests {
 
         assert_eq!(id.owner, "my-org");
         assert_eq!(id.name, "some_repo.rs");
+    }
+
+    #[test]
+    fn builds_clone_urls_in_both_protocols() {
+        let id = RepoId::new(Provider::GitHub, "mcanouil", "minato");
+
+        assert_eq!(
+            id.clone_url(CloneProtocol::Ssh),
+            "git@github.com:mcanouil/minato.git"
+        );
+        assert_eq!(
+            id.clone_url(CloneProtocol::Https),
+            "https://github.com/mcanouil/minato.git"
+        );
+    }
+
+    #[test]
+    fn a_clone_url_round_trips_back_to_the_same_identity() {
+        let id = RepoId::new(Provider::GitHub, "mcanouil", "minato");
+
+        for protocol in [CloneProtocol::Ssh, CloneProtocol::Https] {
+            let url = id.clone_url(protocol);
+            let parsed = crate::scan::remote_url::parse(&url)
+                .unwrap_or_else(|error| panic!("`{url}` should parse back: {error}"));
+
+            assert_eq!(
+                parsed, id,
+                "a URL minato builds must be one minato can read back"
+            );
+        }
     }
 
     #[test]

@@ -182,6 +182,17 @@ pub enum GitHubError {
         messages: String,
     },
 
+    /// GitHub answered with a status that means nothing `minato` expects.
+    #[error(
+        "GitHub returned {status} while listing repositories for `{account}`; if this persists, check https://www.githubstatus.com"
+    )]
+    Unexpected {
+        /// The account being listed.
+        account: String,
+        /// The status code returned.
+        status: u16,
+    },
+
     /// The response could not be understood.
     #[error(
         "cannot understand GitHub's response while listing repositories for `{account}`: {source}"
@@ -387,6 +398,26 @@ impl GitHubClient {
 
         if let Some(throttle) = throttle_from(status, &headers) {
             return Err(PageFailure::Throttled(throttle));
+        }
+
+        // A server error is GitHub having a bad moment rather than a wrong
+        // request, so it is retried like throttling. Parsing the body as JSON
+        // would otherwise report "cannot understand the response", which
+        // describes the symptom and hides the cause.
+        if status.is_server_error() {
+            return Err(PageFailure::Throttled(Throttle {
+                retry_after: header_number(&headers, "retry-after").map(Duration::from_secs),
+                reset: None,
+                transient: true,
+            }));
+        }
+
+        if !status.is_success() {
+            return Err(GitHubError::Unexpected {
+                account: login.to_owned(),
+                status: status.as_u16(),
+            }
+            .into());
         }
 
         let body = response

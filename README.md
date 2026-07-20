@@ -40,9 +40,18 @@ Every command takes `--json` for scripts and agents, and `--refresh` to ignore c
 | --- | --- |
 | `minato list` | Every repository the provider reports, with stars, issues, pull requests, licence, and when it was last pushed. |
 | `minato status` | How local clones stand against the provider: not cloned, in sync, ahead, behind, diverged, or local only, with the reason. |
+| `minato clone` | Clones repositories that have no local copy, into `layout` under the first root. Skips any destination that already exists. |
+| `minato fetch` | Fetches every clone. Updates remote-tracking refs only, so it never touches a working tree and is always safe to run. |
+| `minato update` | Fast-forwards clones that are strictly behind and have no modified tracked files. Everything else is reported with the reason it was left alone. |
 | `minato refresh` | Discards cached data so the next run asks the provider again. |
 | `minato auth status` | Whether a token was found and where it came from, never the token itself. |
 | `minato doctor` | Checks git, the token, configuration, roots, and the cache, reporting all of them rather than stopping at the first problem. |
+
+`clone`, `fetch`, and `update` all take `--dry-run`, which reports what would happen and changes nothing.
+One repository failing does not stop the others; every repository is reported and the process exits non-zero if any of them failed.
+
+Nothing force-pushes, rebases, or discards a change.
+An update is only ever a fast-forward, so if the situation has been misjudged, git refuses rather than improvising.
 
 Provider responses are cached for fifteen minutes.
 Cached output says how old it is, so stale data never passes for fresh, and it stays readable with no network at all.

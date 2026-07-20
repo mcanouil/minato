@@ -9,8 +9,15 @@ async fn main() -> ExitCode {
 
     match cli::run(&cli).await {
         Ok(output) => {
-            println!("{}", output.trim_end());
-            ExitCode::SUCCESS
+            println!("{}", output.text.trim_end());
+
+            // A batch that reports failures has still run, so its output is
+            // printed, but the exit code must say that something went wrong.
+            if output.failed {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
         }
         Err(error) => {
             eprintln!("minato: {error}");
