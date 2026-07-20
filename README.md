@@ -37,6 +37,11 @@ A clone is matched to a repository by its remote URL rather than by where it sit
 A group is simply a directory beneath a root, so `~/Projects/demo/some-repo` is in the `demo` group with nothing to configure.
 The tree is the source of truth, and the relationship runs both ways: `--group demo` selects what is already there, and `minato clone --into-group demo` puts new clones where that group already lives.
 
+Moving between groups moves the directory: `minato move imdb-ratings --to-group demo`.
+A clone does not care where it sits, so this is a plain rename, but it is still a change to your filesystem.
+It is therefore one repository at a time, never a side effect of another command, refuses anything it would have to overwrite, and refuses an ambiguous name rather than guessing which repository you meant.
+The directory keeps its own name, which is not always the repository name.
+
 `--group` and `--into-group` are deliberately different.
 The first selects by where a clone already sits; the second says where a new one should go.
 A repository that has not been cloned is in no group, so filtering `clone` by one would match nothing.
@@ -62,6 +67,7 @@ Commands can be narrowed with `--owner`, `--group`, and `--state`, each repeatab
 | `minato clone` | Clones repositories that have no local copy. `--into <directory>` chooses where they land, defaulting to the first configured root. Skips any destination that already exists. |
 | `minato fetch` | Fetches every clone. Updates remote-tracking refs only, so it never touches a working tree and is always safe to run. |
 | `minato update` | Fast-forwards clones that are strictly behind and have no modified tracked files. Everything else is reported with the reason it was left alone. |
+| `minato move <repo> --to-group <group>` | Moves one repository into another group, which means moving its directory. |
 | `minato refresh` | Discards cached data so the next run asks the provider again. |
 | `minato auth status` | Whether a token was found and where it came from, never the token itself. |
 | `minato doctor` | Checks git, the token, configuration, roots, and the cache, reporting all of them rather than stopping at the first problem. |

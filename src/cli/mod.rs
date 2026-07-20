@@ -104,6 +104,24 @@ pub enum Command {
         dry_run: bool,
     },
 
+    /// Move one repository into a group, which moves it on disk.
+    ///
+    /// Deliberately one repository at a time: this changes the filesystem, so
+    /// it is never a side effect of anything else.
+    Move {
+        /// Which repository, named by identity, owner/name, or bare name.
+        #[arg(value_name = "REPOSITORY")]
+        repository: String,
+
+        /// The group to move it into, which is a directory beneath its root.
+        #[arg(long = "to-group", value_name = "GROUP")]
+        group: String,
+
+        /// Report what would move, and change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Discard cached data so the next run asks the provider again.
     Refresh,
 
@@ -164,6 +182,10 @@ pub enum CliError {
         #[source]
         source: std::io::Error,
     },
+
+    /// A repository could not be moved.
+    #[error(transparent)]
+    Move(#[from] actions::MoveError),
 
     /// Output could not be rendered.
     #[error("cannot render JSON output: {0}")]
@@ -240,6 +262,11 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
         }
         Command::Fetch { dry_run } => act(cli, Act::Fetch, mode(*dry_run)).await,
         Command::Update { dry_run } => act(cli, Act::Update, mode(*dry_run)).await,
+        Command::Move {
+            repository,
+            group,
+            dry_run,
+        } => move_one(cli, repository, group, mode(*dry_run)).await,
     }
 }
 
@@ -350,6 +377,36 @@ fn render_summary(summary: &actions::Summary) -> String {
     );
 
     out
+}
+
+/// Moves one repository into a group.
+async fn move_one(
+    cli: &Cli,
+    repository: &str,
+    group: &str,
+    mode: Mode,
+) -> Result<Output, CliError> {
+    let paths = paths()?;
+    let config = Config::load_from(&paths.config)?;
+    let gathered = gather(cli, &paths, &config).await?;
+
+    let roots = config.resolved_roots(paths.home.as_deref())?;
+    let scanned = scan::scan(&roots, scan::DEFAULT_MAX_DEPTH);
+    let comparisons = compare::compare(&gathered.remotes, &scanned.repositories, &gathered.tracked);
+
+    let found = actions::find_one(&comparisons, repository)?;
+    let report = actions::move_to_group(found, repository, &roots, group, mode)?;
+
+    if cli.json {
+        return Ok(serde_json::to_string_pretty(&report)?.into());
+    }
+
+    Ok(match &report.outcome {
+        actions::Outcome::Would { detail } => format!("Would {detail}."),
+        actions::Outcome::Done { detail } => format!("Did {detail}."),
+        other => format!("{other:?}"),
+    }
+    .into())
 }
 
 /// Opens the interactive browser over the same comparison the commands use.
