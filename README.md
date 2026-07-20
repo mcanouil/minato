@@ -121,13 +121,33 @@ cargo test --locked
 Tests that reach the network are marked `#[ignore]`, so the default run stays offline and deterministic.
 Run them with `cargo test -- --ignored` after `gh auth login`, which checks the GraphQL query against the real API rather than only against a mock.
 
-A devcontainer is provided in [`.devcontainer/`](.devcontainer), intended to remove the need for a host toolchain.
-It has not been exercised yet, so treat it as unverified until it has been: development so far has run on the host.
-It mounts `~/Projects` read-only, which means manual runs can see real clones without the container being able to mutate them, but also that anything writing to a clone, `git fetch` included, cannot run inside it as currently configured.
+A devcontainer is provided in [`.devcontainer/`](.devcontainer), so no host toolchain is needed beyond Docker.
 
 ```sh
 devcontainer up --workspace-folder .
+devcontainer exec --workspace-folder . cargo test --locked
 ```
+
+It has been verified end to end: the container builds, all tests pass inside it, and `minato` itself runs there.
+It carries Rust, `git`, `gh`, `jq`, and `kata`, with the kata ledger bind-mounted from the host so issue state is shared.
+
+Two things worth knowing.
+
+The devcontainer CLI must be reasonably current.
+Version 0.76 starts the container and then never returns, which looks like a hang but is not: the container is running fine.
+Version 0.87 completes in seconds.
+
+Authentication is not inherited.
+`gh` on macOS keeps its token in the keychain, which cannot be bind-mounted, so mounting its configuration directory would only produce a broken login.
+Export a token on the host before starting the container instead, which the network tests and any real run inside will pick up.
+
+```sh
+export MINATO_GITHUB_TOKEN=$(gh auth token)
+devcontainer up --workspace-folder .
+```
+
+`~/Projects` is mounted read-only at `/host/Projects`, so a run inside can see real clones and cannot alter them.
+That also means anything writing to a clone, `git fetch` included, cannot run against that mount.
 
 CI runs these same three commands, with tests on Linux, macOS, and Windows.
 Lint levels live in `Cargo.toml` under `[lints]`, so a local run and a CI run agree; there are no extra lint flags in the workflow.
