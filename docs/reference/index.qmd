@@ -1,0 +1,150 @@
+---
+title: "Commands"
+subtitle: "Every capability is a command, so a person, a script, or an agent can reach any outcome."
+---
+
+## Shared options
+
+Every command accepts these.
+
+| Option | Does |
+| --- | --- |
+| `--json` | Emit JSON instead of a table, for scripts and agents. |
+| `--refresh` | Ignore cached data and ask the provider again. |
+| `--owner <OWNER>` | Keep only repositories owned by these accounts. Repeatable. |
+| `--group <GROUP>` | Keep only repositories in these groups, which are the directories beneath a root. Repeatable. |
+| `--state <STATE>` | Keep only repositories in these states. Repeatable. |
+
+Filters combine rather than accumulate: naming an owner and a state requires both.
+All of them are matched without regard to case.
+
+### States
+
+| Value | Means |
+| --- | --- |
+| `not-cloned` | Reported by the provider, with no local clone. |
+| `in-sync` | Matching the remote exactly. |
+| `ahead` | Holding commits the remote does not. |
+| `behind` | Missing commits the remote has. |
+| `diverged` | Both sides hold commits the other lacks. |
+| `local-only` | A clone no reported repository corresponds to. |
+| `incomparable` | A clone that cannot be compared, such as one with no commits or a detached head. |
+| `drifted` | Anything that is not in sync, which is usually what wants attention. |
+
+## Reading
+
+### `minato list`
+
+Every repository the provider reports, with stars, issues, pull requests, licence, language, and when it was last pushed.
+
+```{.bash filename="Terminal"}
+minato list --owner mcanouil
+```
+
+### `minato status`
+
+How local clones stand against what the provider reports.
+
+```{.bash filename="Terminal"}
+minato status --group demo
+minato status --state behind --state diverged
+```
+
+```{.default filename="Output"}
+REPOSITORY                     GROUP   STATE       NOTES                     PATH
+github:mcanouil/imdb-ratings   perso   behind 2                              /Users/you/Projects/perso/imdb-ratings
+github:mcanouil/pandoc         forks   in sync     fork, 429 behind upstream /Users/you/Projects/forks/pandoc
+```
+
+### `minato doctor`
+
+Checks `git`, the token, configuration, roots, and the cache, reporting all of them rather than stopping at the first problem.
+
+### `minato auth status`
+
+Whether a token was found and where it came from, never the token itself.
+
+### `minato refresh`
+
+Discards cached data so the next run asks the provider again.
+
+## Changing things
+
+Each of these takes `--dry-run`, which reports what would happen and changes nothing.
+One repository failing never stops the others: every repository is reported, and the process exits non-zero if any failed.
+
+### `minato clone`
+
+Clones repositories that have no local copy.
+
+| Option | Does |
+| --- | --- |
+| `--into <DIRECTORY>` | Where to put them. Defaults to the first configured root. |
+| `--into-group <GROUP>` | Put them in the directory that group already occupies. |
+| `--shallow` | Clone with a truncated history. |
+
+```{.bash filename="Terminal"}
+minato clone --state not-cloned --into-group demo --dry-run
+```
+
+::: {.callout-note}
+`--into-group` is not the `--group` filter.
+The filter selects by where a clone already sits, and a repository that has not been cloned is in no group, so filtering `clone` by one would match nothing.
+:::
+
+Anything already at the destination is skipped rather than written over.
+
+### `minato fetch`
+
+Fetches every clone, updating remote-tracking refs only.
+It never touches a working tree, so it is safe to run at any time, including on a repository with uncommitted changes.
+
+```{.bash filename="Terminal"}
+minato fetch --group quarto-dev
+```
+
+### `minato update`
+
+Fast-forwards clones that are strictly behind and have no modified tracked files.
+
+```{.bash filename="Terminal"}
+minato update --dry-run
+minato update
+```
+
+Everything else is reported with the reason it was left alone, because a repository that cannot be updated is exactly the one worth knowing about.
+
+Untracked files do not block an update: `git` fast-forwards alongside them, and refuses by itself in the one case where it would overwrite one.
+
+### `minato move`
+
+Moves one repository into another group, which means moving its directory.
+
+```{.bash filename="Terminal"}
+minato move imdb-ratings --to-group demo --dry-run
+```
+
+Deliberately one repository at a time, and never a side effect of another command.
+It refuses rather than guesses: an ambiguous name lists the matches, an occupied destination is left untouched, and a repository already in that group is not moved onto itself.
+
+The directory keeps its own name, which is not always the repository name.
+
+## Browsing
+
+### `minato tui`
+
+Opens a keyboard-driven table over exactly the comparison the commands produce.
+
+| Key | Does |
+| --- | --- |
+| `j` `k`, arrows | Move. `g` and `G` jump to the ends. |
+| `/` | Search by repository, group, or path. |
+| `s` | Cycle the ordering: name, state, group. |
+| `f` `u` | Fetch or update the highlighted repository. |
+| `r` | Rescan the disk. |
+| `q` | Leave. |
+
+Sorting by state puts what needs attention first.
+Reloading rescans the disk but does not refetch, since a keystroke should not spend your rate limit.
+
+It needs a terminal, and says so plainly when there is not one rather than failing obscurely.

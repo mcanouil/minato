@@ -1,0 +1,88 @@
+meta:
+  name: minato
+  license: MIT
+  link:
+    home: https://mickael.canouil.fr
+    github: https://github.com/mcanouil/minato
+
+# Minato is Japanese for harbour, so the palette is a harbour at dusk: deep
+# water, the teal of the water itself, and the amber of a lantern on the quay.
+# Amber earns its place beyond decoration: the tool reports states, and the ones
+# that want attention need somewhere to sit that is neither alarming nor calm.
+color:
+  palette:
+    deep-water: "#0C1620"
+    slack-water: "#132430"
+    mist: "#F7F9FB"
+    ink: "#16242F"
+    foam: "#E6EDF3"
+    harbour: "#0E6E7D"
+    harbour-light: "#4FB3C4"
+    lantern: "#C2661B"
+    lantern-light: "#F0A555"
+    rope: "#2A4A5C"
+    rope-light: "#8FA9B8"
+    moss: "#2F7D5C"
+    moss-light: "#5FBF92"
+    signal: "#B23A2B"
+    signal-light: "#E8776A"
+  background:
+    light: mist
+    dark: deep-water
+  foreground:
+    light: ink
+    dark: foam
+  primary:
+    light: harbour
+    dark: harbour-light
+  secondary:
+    light: rope
+    dark: rope-light
+  success:
+    light: moss
+    dark: moss-light
+  warning:
+    light: lantern
+    dark: lantern-light
+  danger:
+    light: signal
+    dark: signal-light
+  info:
+    light: harbour
+    dark: harbour-light
+  light:
+    light: mist
+    dark: foam
+  dark:
+    light: ink
+    dark: deep-water
+
+typography:
+  fonts:
+    - family: Outfit
+      source: google
+      weight: [400, 500, 600, 700]
+    - family: Inter
+      source: google
+      weight: [300, 400, 500, 600, 700]
+    - family: JetBrains Mono
+      source: google
+      weight: [400, 500, 700]
+  base:
+    family: Inter
+    weight: 400
+    line-height: 1.6
+  headings:
+    family: Outfit
+    weight: 600
+    line-height: 1.25
+  monospace: JetBrains Mono
+  link:
+    color: primary
+
+defaults:
+  bootstrap:
+    defaults:
+      tooltip-color: $background
+      tooltip-bg: $foreground
+      btn-close-color: $foreground

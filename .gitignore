@@ -3,3 +3,4 @@
 .kata.local.toml
 /target
 /docs/_site/
+/docs/.quarto/

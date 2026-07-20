@@ -1,42 +1,105 @@
 ---
 title: "minato"
-subtitle: "Overview and sync of Git repositories across hosting providers."
+toc: false
+sidebar: false
+include-in-header:
+  - text: |
+      <style>
+        header#title-block-header { display: none; }
+      </style>
 ---
 
-Repositories accumulate across hosting providers, and local clones drift away from them.
-Some remotes are never cloned.
-Some clones are abandoned, renamed, or forgotten.
-Forks fall behind their upstream.
+::: {.hero}
 
-`minato` gives one view of that landscape and safe, scriptable actions to close the gap.
+::: {.hero-content}
 
-GitHub is the only supported provider for now.
+# minato
 
-::: {.callout-important}
+[A harbour for your repositories.]{.lead}
 
-## Status
+Repositories accumulate across hosting providers while local clones drift away from them.
+Some remotes are never cloned, some clones are abandoned, and forks fall behind what they were forked from.
+`minato` shows that whole picture at once, then offers safe, scriptable ways to close the gap.
 
-Early development.
-
-The command surface is not yet implemented; the repository currently contains the project scaffold only.
-This site documents commands as they land, never before.
+[Get started](get-started/index.qmd){.btn .btn-primary .btn-lg}
+[View on GitHub](https://github.com/mcanouil/minato){.btn .btn-outline-secondary .btn-lg}
 
 :::
 
-## Design goals
+:::
 
-- Every capability is a command-line command first, so a person, a script, or an agent can reach any outcome the interactive interface offers.
-- Read-only by default: comparison never mutates a working tree, and every mutating action is explicit and opt-in.
-- Nothing destructive happens implicitly: no force-push, no rebase, and no discarding of local changes.
-- Durable state lives in plain text that can be read, edited, and version-controlled by hand.
+## What it tells you
 
-## Requirements
+Every repository lands in exactly one state, and the reason travels with it.
 
-- Rust 1.88 or later, for building from source.
-- A `git` binary on `PATH`, which `minato` shells out to so that existing SSH agents and credential helpers keep working.
+::: {.states}
+[in sync]{.state .state-sync}
+[behind 12]{.state .state-behind}
+[ahead 2]{.state .state-ahead}
+[diverged +4/-1]{.state .state-diverged}
+[not cloned]{.state .state-uncloned}
+:::
 
-## Documentation
+```{.bash filename="Terminal"}
+minato status --state drifted
+```
 
-- [Design note](design.qmd) covers the provider abstraction and the comparison and sync state machine.
+```{.default filename="Output"}
+REPOSITORY                     GROUP        STATE                         NOTES
+github:mcanouil/quarto-cli     quarto-dev   in sync                       fork, 135 behind upstream
+github:mcanouil/imdb-ratings   perso        behind 2
+github:mcanouil/game-night     perso        local only, gone from GitHub
+```
 
-Installation, configuration, and per-command reference pages are added as the corresponding features are implemented.
+## What it does about it
+
+::: {.cards}
+
+::: {.card-item}
+### Compares
+
+Reads what the provider reports and what is on disk, then matches the two by remote URL rather than by path, so any directory arrangement works.
+:::
+
+::: {.card-item}
+### Clones what is missing
+
+Bulk clone by owner, group, or state, into a directory you choose.
+Anything already there is skipped rather than written over.
+:::
+
+::: {.card-item}
+### Updates only what is safe
+
+Fast-forward only, and only when a repository is strictly behind with no modified tracked files.
+Everything else is reported with the reason it was left alone.
+:::
+
+::: {.card-item}
+### Groups by your own tree
+
+A group is a directory beneath a root, so the folders you already keep become the grouping, with nothing to configure.
+:::
+
+::: {.card-item}
+### Follows forks
+
+Reports how far a fork trails the repository it was forked from, so a stale fork is visible before it matters.
+:::
+
+::: {.card-item}
+### Answers to scripts
+
+Every command takes `--json`, so anything the interface offers can be done by a script or an agent.
+:::
+
+:::
+
+## Nothing surprising happens
+
+`minato` never force-pushes, never rebases, and never discards a change.
+An update is only ever a fast-forward, so if the situation has been misjudged, `git` refuses rather than improvising.
+
+Anything that changes your filesystem is explicit, offers a rehearsal with `--dry-run` first, and reports what it deliberately did not touch.
+
+[Read the design note](design.qmd){.btn .btn-outline-secondary}

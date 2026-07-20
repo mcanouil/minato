@@ -1,28 +1,92 @@
 project:
   type: website
+  resources:
+    - assets/scripts/
+
+lang: en-GB
+date-format: "dddd[, the] Do [of] MMMM, YYYY"
 
 website:
   title: "minato"
   description: "Overview and sync of Git repositories across hosting providers."
   site-url: "https://m.canouil.dev/minato"
   repo-url: "https://github.com/mcanouil/minato"
-  repo-actions: [issue, edit]
+  repo-actions: [edit, issue]
+  repo-link-target: _blank
+  repo-link-rel: noopener noreferrer
+  open-graph: true
+  page-navigation: true
+  back-to-top-navigation: true
+  search:
+    location: navbar
+    type: overlay
+
   navbar:
+    title: "minato"
+    background: dark
+    search: true
     left:
-      - href: index.qmd
-        text: "Home"
-      - href: design.qmd
-        text: "Design"
+      - text: "{{< iconify octicon:rocket-16 title='Get started' label='Get started' >}} Get started"
+        href: get-started/index.qmd
+        aria-label: "Get started"
+      - text: "{{< iconify octicon:terminal-16 title='Commands' label='Commands' >}} Commands"
+        href: reference/index.qmd
+        aria-label: "Commands"
+      - text: "{{< iconify octicon:light-bulb-16 title='Design' label='Design' >}} Design"
+        href: design.qmd
+        aria-label: "Design"
+      - text: "{{< iconify octicon:history-16 title='Changelog' label='Changelog' >}} Changelog"
+        href: changelog.qmd
+        aria-label: "Changelog"
     right:
-      - icon: github
-        href: "https://github.com/mcanouil/minato"
-        aria-label: "GitHub repository"
+      # Replaced at load by assets/scripts/github-widget.html with a button
+      # showing live star and fork counts and a repository menu.
+      - text: "{{< iconify octicon:mark-github-16 title='GitHub' label='GitHub' >}}"
+        href: "#github-widget"
+        aria-label: "GitHub"
+
   page-footer:
-    left: "© 2026 Mickaël Canouil"
-    right: "Built with [Quarto](https://quarto.org)."
+    border: true
+    left: |
+      Powered by [{{< iconify simple-icons:quarto title="Quarto Logo" label="Quarto Logo" >}} Quarto](https://quarto.org).
+    center: |
+      &copy; []{#current-year} [Mickaël CANOUIL](https://mickael.canouil.fr). [{{< iconify octicon:heart-fill-16 title="Heart" label="Heart" >}} Sponsor](https://github.com/sponsors/mcanouil?o=esb).
+    right: |
+      Licence: [MIT](https://github.com/mcanouil/minato?tab=MIT-1-ov-file#readme).
+
+filters:
+  - at: pre-quarto
+    path: code-window
+
+extensions:
+  code-window:
+    style: "macos"
+    # Blocks here are either a command to run or the output it produced, and
+    # both are labelled explicitly, so a language-derived label would only add
+    # noise.
+    auto-filename: false
+
+brand: _brand.yml
 
 format:
   html:
-    theme: cosmo
+    theme:
+      light: &theme
+        - brand
+        - assets/stylesheets/theme.scss
+      dark: *theme
+    respect-user-color-scheme: true
     toc: true
+    toc-depth: 3
     code-copy: true
+    code-overflow: wrap
+    link-external-newwindow: true
+    grid:
+      sidebar-width: 280px
+      body-width: 1000px
+      margin-width: 260px
+    include-after-body:
+      - assets/scripts/current-year.html
+      - assets/scripts/external-links.html
+      - assets/scripts/tooltips.html
+      - assets/scripts/github-widget.html
