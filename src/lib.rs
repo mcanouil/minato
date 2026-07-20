@@ -9,6 +9,7 @@ pub mod cache;
 pub mod cli;
 pub mod compare;
 pub mod config;
+pub mod filter;
 pub mod git;
 pub mod github;
 pub mod model;

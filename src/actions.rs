@@ -282,6 +282,7 @@ mod tests {
         Comparison {
             id: Some(RepoId::new(Provider::GitHub, "mcanouil", "minato")),
             path: path.map(PathBuf::from),
+            group: None,
             state,
             local: path.map(|_| LocalFlags::default()),
             remote: None,

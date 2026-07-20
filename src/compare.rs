@@ -132,6 +132,10 @@ pub struct Comparison {
     /// Where the clone is, absent when there is none.
     pub path: Option<PathBuf>,
 
+    /// The group the clone sits in, absent when it is not cloned or sits
+    /// directly in a root.
+    pub group: Option<String>,
+
     /// The single answer for this repository.
     pub state: State,
 
@@ -241,6 +245,7 @@ pub fn compare(
             comparisons.push(Comparison {
                 id: Some(remote.id.clone()),
                 path: None,
+                group: None,
                 state: State::RemoteOnly,
                 local: None,
                 remote: Some(remote_flags(remote)),
@@ -268,6 +273,7 @@ fn compare_one(
     Comparison {
         id: local.id.clone(),
         path: Some(local.path.clone()),
+        group: local.group.clone(),
         state: state_for(local, remote, tracked),
         local: Some(LocalFlags {
             dirty: local.dirty,
@@ -353,6 +359,7 @@ mod tests {
             }),
             dirty: false,
             untracked: false,
+            group: None,
         }
     }
 
@@ -735,6 +742,7 @@ mod properties {
                         head,
                         dirty,
                         untracked,
+                        group: None,
                     }
                 },
             )
