@@ -76,6 +76,9 @@ format:
         - assets/stylesheets/theme.scss
       dark: *theme
     respect-user-color-scheme: true
+    syntax-highlighting:
+      light: github-light
+      dark: github-dark
     toc: true
     toc-depth: 3
     code-copy: true
