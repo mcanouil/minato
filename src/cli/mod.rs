@@ -115,6 +115,9 @@ pub enum Command {
 
     /// Check that configuration and tooling are usable.
     Doctor,
+
+    /// Browse repositories interactively.
+    Tui,
 }
 
 /// Authentication subcommands.
@@ -150,6 +153,17 @@ pub enum CliError {
     /// Configuration described nothing usable.
     #[error(transparent)]
     Validation(#[from] config::ValidationError),
+
+    /// The terminal could not be driven.
+    ///
+    /// The cause is not interpolated here, because the caller prints the whole
+    /// chain and would otherwise show it twice.
+    #[error("cannot run the interactive browser")]
+    Terminal {
+        /// What went wrong.
+        #[source]
+        source: std::io::Error,
+    },
 
     /// Output could not be rendered.
     #[error("cannot render JSON output: {0}")]
@@ -203,6 +217,7 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
             command: AuthCommand::Status,
         } => Ok(auth_status(cli.json).into()),
         Command::Doctor => doctor(cli.json).map(Into::into),
+        Command::Tui => tui(cli).await,
         Command::Refresh => refresh(cli.json).map(Into::into),
         Command::List => list(cli).await.map(Into::into),
         Command::Status => status(cli).await.map(Into::into),
@@ -335,6 +350,35 @@ fn render_summary(summary: &actions::Summary) -> String {
     );
 
     out
+}
+
+/// Opens the interactive browser over the same comparison the commands use.
+async fn tui(cli: &Cli) -> Result<Output, CliError> {
+    let paths = paths()?;
+    let config = Config::load_from(&paths.config)?;
+    let gathered = gather(cli, &paths, &config).await?;
+    let roots = config.resolved_roots(paths.home.as_deref())?;
+    let filter = cli.filter();
+
+    let build = |remotes: &[crate::model::RemoteRepo]| {
+        let scanned = scan::scan(&roots, scan::DEFAULT_MAX_DEPTH);
+
+        filter.apply(compare::compare(
+            remotes,
+            &scanned.repositories,
+            &gathered.tracked,
+        ))
+    };
+
+    let rows = build(&gathered.remotes);
+
+    // Reloading rescans the disk. It deliberately does not refetch: asking the
+    // provider again is what `--refresh` is for, and a keystroke should not
+    // spend someone's rate limit.
+    crate::tui::run(rows, || build(&gathered.remotes))
+        .map_err(|source| CliError::Terminal { source })?;
+
+    Ok(String::new().into())
 }
 
 /// Where configuration and the cache live for this run.
@@ -540,15 +584,14 @@ async fn gather(cli: &Cli, paths: &Paths, config: &Config) -> Result<Gathered, C
     for account in &accounts {
         let key = format!("github-{}", account.login());
 
-        if !cli.refresh {
-            if let Some(cached) = paths.cache.load::<Vec<RemoteRepo>>(&key) {
-                if !cached.is_stale(now, DEFAULT_TTL) {
-                    let age = cached.age(now);
-                    staleness = Some(staleness.map_or(age, |worst| worst.max(age)));
-                    remotes.extend(cached.data);
-                    continue;
-                }
-            }
+        if !cli.refresh
+            && let Some(cached) = paths.cache.load::<Vec<RemoteRepo>>(&key)
+            && !cached.is_stale(now, DEFAULT_TTL)
+        {
+            let age = cached.age(now);
+            staleness = Some(staleness.map_or(age, |worst| worst.max(age)));
+            remotes.extend(cached.data);
+            continue;
         }
 
         // The client is built once, and only when something actually needs

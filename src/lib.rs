@@ -14,3 +14,4 @@ pub mod git;
 pub mod github;
 pub mod model;
 pub mod scan;
+pub mod tui;
