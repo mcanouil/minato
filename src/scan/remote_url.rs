@@ -20,14 +20,14 @@ const KNOWN_HOSTS: [(&str, Provider); 2] = [
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseRemoteError {
     /// The URL did not name a host and a path.
-    #[error("remote `{url}` is not a URL `fleet` can read")]
+    #[error("remote `{url}` is not a URL `minato` can read")]
     Unreadable {
         /// The remote as configured.
         url: String,
     },
 
-    /// The host is not one `fleet` knows.
-    #[error("remote `{url}` points at `{host}`, which is not a provider `fleet` supports")]
+    /// The host is not one `minato` knows.
+    #[error("remote `{url}` points at `{host}`, which is not a provider `minato` supports")]
     UnknownHost {
         /// The remote as configured.
         url: String,
@@ -122,59 +122,59 @@ fn split_owner_and_name(path: &str) -> Option<(&str, &str)> {
 mod tests {
     use super::*;
 
-    fn expect_fleet(url: &str) {
+    fn expect_minato(url: &str) {
         let id = parse(url).unwrap_or_else(|error| panic!("`{url}` should parse, got: {error}"));
 
         assert_eq!(
             id.to_string(),
-            "github:mcanouil/fleet",
+            "github:mcanouil/minato",
             "`{url}` produced the wrong identity"
         );
     }
 
     #[test]
     fn reads_the_scp_like_ssh_form() {
-        expect_fleet("git@github.com:mcanouil/fleet.git");
-        expect_fleet("git@github.com:mcanouil/fleet");
+        expect_minato("git@github.com:mcanouil/minato.git");
+        expect_minato("git@github.com:mcanouil/minato");
     }
 
     #[test]
     fn reads_ssh_urls() {
-        expect_fleet("ssh://git@github.com/mcanouil/fleet.git");
-        expect_fleet("ssh://git@github.com:22/mcanouil/fleet.git");
+        expect_minato("ssh://git@github.com/mcanouil/minato.git");
+        expect_minato("ssh://git@github.com:22/mcanouil/minato.git");
     }
 
     #[test]
     fn reads_https_urls() {
-        expect_fleet("https://github.com/mcanouil/fleet.git");
-        expect_fleet("https://github.com/mcanouil/fleet");
-        expect_fleet("http://github.com/mcanouil/fleet");
+        expect_minato("https://github.com/mcanouil/minato.git");
+        expect_minato("https://github.com/mcanouil/minato");
+        expect_minato("http://github.com/mcanouil/minato");
     }
 
     #[test]
     fn reads_urls_carrying_credentials() {
-        expect_fleet("https://token@github.com/mcanouil/fleet.git");
-        expect_fleet("https://user:password@github.com/mcanouil/fleet.git");
+        expect_minato("https://token@github.com/mcanouil/minato.git");
+        expect_minato("https://user:password@github.com/mcanouil/minato.git");
     }
 
     #[test]
     fn reads_the_git_protocol() {
-        expect_fleet("git://github.com/mcanouil/fleet.git");
+        expect_minato("git://github.com/mcanouil/minato.git");
     }
 
     #[test]
     fn ignores_a_trailing_slash_and_surrounding_whitespace() {
-        expect_fleet("https://github.com/mcanouil/fleet/");
-        expect_fleet("  git@github.com:mcanouil/fleet.git  ");
+        expect_minato("https://github.com/mcanouil/minato/");
+        expect_minato("  git@github.com:mcanouil/minato.git  ");
     }
 
     #[test]
     fn normalises_case_the_way_an_identity_does() {
-        let id = parse("git@GitHub.com:McAnouil/Fleet.git").unwrap();
+        let id = parse("git@GitHub.com:McAnouil/Minato.git").unwrap();
 
         assert_eq!(
             id.to_string(),
-            "github:mcanouil/fleet",
+            "github:mcanouil/minato",
             "a remote URL and an API response must agree on one identity"
         );
     }
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn rejects_a_host_that_is_not_a_supported_provider() {
-        let error = parse("git@gitlab.com:mcanouil/fleet.git").unwrap_err();
+        let error = parse("git@gitlab.com:mcanouil/minato.git").unwrap_err();
 
         assert!(matches!(error, ParseRemoteError::UnknownHost { .. }));
         assert!(
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn rejects_a_path_without_an_owner() {
         assert!(matches!(
-            parse("https://github.com/fleet.git"),
+            parse("https://github.com/minato.git"),
             Err(ParseRemoteError::UnreadablePath { .. })
         ));
     }
@@ -215,9 +215,9 @@ mod tests {
 
     #[test]
     fn takes_the_last_two_segments_of_a_nested_path() {
-        let id = parse("https://github.com/group/subgroup/fleet.git").unwrap();
+        let id = parse("https://github.com/group/subgroup/minato.git").unwrap();
 
         assert_eq!(id.owner, "subgroup");
-        assert_eq!(id.name, "fleet");
+        assert_eq!(id.name, "minato");
     }
 }

@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use fleet::github::{Account, GitHubClient, GitHubError, RetryPolicy, Token};
+use minato::github::{Account, GitHubClient, GitHubError, RetryPolicy, Token};
 use serde_json::json;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate};
@@ -68,7 +68,7 @@ async fn reads_every_field_a_repository_reports() {
     let server = MockServer::start().await;
 
     let node = json!({
-        "name": "Fleet",
+        "name": "Minato",
         "owner": { "login": "McAnouil" },
         "isPrivate": true,
         "isArchived": true,
@@ -107,7 +107,7 @@ async fn reads_every_field_a_repository_reports() {
 
     assert_eq!(
         repository.id.to_string(),
-        "github:mcanouil/fleet",
+        "github:mcanouil/minato",
         "an identity must be case-normalised however the API cased it"
     );
     assert_eq!(repository.default_branch.as_deref(), Some("main"));
@@ -435,7 +435,7 @@ async fn reports_an_absent_discussion_count_as_unknown_rather_than_zero() {
 #[tokio::test]
 #[ignore = "requires network access and a GitHub token"]
 async fn the_query_is_accepted_by_the_real_api() {
-    let (token, source) = fleet::github::auth::resolve_token_from_system()
+    let (token, source) = minato::github::auth::resolve_token_from_system()
         .expect("a token from gh or the environment");
 
     let repositories = GitHubClient::new(token, Some(source))

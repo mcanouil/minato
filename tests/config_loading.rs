@@ -5,12 +5,12 @@
 
 use std::fs;
 
-use fleet::config::{Config, ConfigError, Protocol, ValidationError};
-use fleet::model::{Provider, RepoId};
+use minato::config::{Config, ConfigError, Protocol, ValidationError};
+use minato::model::{Provider, RepoId};
 
 fn write_config(contents: &str) -> (tempfile::TempDir, std::path::PathBuf) {
     let dir = tempfile::tempdir().expect("a temporary directory");
-    let path = dir.path().join("fleet.toml");
+    let path = dir.path().join("minato.toml");
     fs::write(&path, contents).expect("the configuration to be written");
 
     (dir, path)
@@ -28,7 +28,7 @@ roots = ["~/Projects"]
 protocol = "https"
 
 [tags]
-reference = ["github:mcanouil/fleet"]
+reference = ["github:mcanouil/minato"]
 "#,
     );
 
@@ -37,7 +37,7 @@ reference = ["github:mcanouil/fleet"]
     assert_eq!(config.local.protocol, Protocol::Https);
     assert_eq!(
         config.tags["reference"],
-        [RepoId::new(Provider::GitHub, "mcanouil", "fleet")]
+        [RepoId::new(Provider::GitHub, "mcanouil", "minato")]
     );
 }
 

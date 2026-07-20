@@ -1,10 +1,10 @@
 [package]
-name = "fleet"
+name = "minato"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Overview and sync of Git repositories across hosting providers"
-repository = "https://github.com/mcanouil/fleet"
+repository = "https://github.com/mcanouil/minato"
 license = "MIT"
 authors = ["Mickaël Canouil"]
 keywords = ["git", "github", "repository", "cli", "tui"]

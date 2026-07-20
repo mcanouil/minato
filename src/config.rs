@@ -20,12 +20,12 @@ use crate::model::RepoId;
 pub const DEFAULT_LAYOUT: &str = "{owner}/{repo}";
 
 /// The environment variable that overrides the configuration file location.
-pub const CONFIG_ENV: &str = "FLEET_CONFIG";
+pub const CONFIG_ENV: &str = "MINATO_CONFIG";
 
 /// Placeholders a layout may use.
 const LAYOUT_PLACEHOLDERS: [&str; 3] = ["provider", "owner", "repo"];
 
-/// A complete `fleet` configuration.
+/// A complete `minato` configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -127,9 +127,9 @@ pub enum ValidationError {
         layout: String,
     },
 
-    /// The layout used a placeholder `fleet` does not substitute.
+    /// The layout used a placeholder `minato` does not substitute.
     #[error(
-        "`local.layout` uses `{{{placeholder}}}`, which is not a placeholder `fleet` knows; use any of {}",
+        "`local.layout` uses `{{{placeholder}}}`, which is not a placeholder `minato` knows; use any of {}",
         known_placeholders()
     )]
     LayoutUnknownPlaceholder {
@@ -168,14 +168,14 @@ pub enum ConfigError {
         Config::sample()
     )]
     NotFound {
-        /// Where `fleet` looked.
+        /// Where `minato` looked.
         path: PathBuf,
     },
 
     /// The configuration file could not be read.
     #[error("cannot read the configuration at {}: {source}", path.display())]
     Read {
-        /// The file `fleet` tried to read.
+        /// The file `minato` tried to read.
         path: PathBuf,
         /// The underlying failure.
         source: io::Error,
@@ -184,7 +184,7 @@ pub enum ConfigError {
     /// The configuration file is not valid TOML, or has unexpected fields.
     #[error("cannot parse the configuration at {}: {source}", path.display())]
     Parse {
-        /// The file `fleet` tried to parse.
+        /// The file `minato` tried to parse.
         path: PathBuf,
         /// The underlying failure.
         source: toml::de::Error,
@@ -212,7 +212,7 @@ impl Config {
         toml::from_str(text)
     }
 
-    /// Checks that the configuration describes settings `fleet` can act on.
+    /// Checks that the configuration describes settings `minato` can act on.
     ///
     /// # Errors
     ///
@@ -333,7 +333,7 @@ fn placeholders(layout: &str) -> impl Iterator<Item = &str> {
 
 /// Resolves where the configuration file lives.
 ///
-/// The first of these that is set wins: the `FLEET_CONFIG` override, then
+/// The first of these that is set wins: the `MINATO_CONFIG` override, then
 /// `XDG_CONFIG_HOME`, then `~/.config`. The same `.config` path is used on
 /// every platform so that a configuration file can be moved between machines.
 /// An override set to an empty value counts as unset, since an exported but
@@ -357,7 +357,7 @@ pub fn config_path_from(
         .or_else(|| home.map(|home| home.join(".config")))
         .ok_or(ConfigError::NoLocation)?;
 
-    Ok(base.join("fleet").join("fleet.toml"))
+    Ok(base.join("minato").join("minato.toml"))
 }
 
 /// Expands a leading `~` against `home`, leaving every other path untouched.
@@ -400,7 +400,7 @@ layout = "{provider}/{owner}/{repo}"
 protocol = "https"
 
 [tags]
-reference = ["github:mcanouil/fleet"]
+reference = ["github:mcanouil/minato"]
 "#,
         )
         .unwrap();
@@ -412,7 +412,7 @@ reference = ["github:mcanouil/fleet"]
         assert_eq!(config.local.protocol, Protocol::Https);
         assert_eq!(
             config.tags["reference"],
-            [RepoId::new(Provider::GitHub, "mcanouil", "fleet")]
+            [RepoId::new(Provider::GitHub, "mcanouil", "minato")]
         );
     }
 
@@ -442,7 +442,7 @@ reference = ["github:mcanouil/fleet"]
     #[test]
     fn rejects_a_malformed_repository_in_tags() {
         let error = Config::from_toml(
-            "[providers.github]\nusers = [\"mcanouil\"]\n\n[local]\nroots = [\"~/P\"]\n\n[tags]\nreference = [\"mcanouil/fleet\"]\n",
+            "[providers.github]\nusers = [\"mcanouil\"]\n\n[local]\nroots = [\"~/P\"]\n\n[tags]\nreference = [\"mcanouil/minato\"]\n",
         )
         .unwrap_err();
 
@@ -511,13 +511,13 @@ reference = ["github:mcanouil/fleet"]
     #[test]
     fn the_override_wins_over_every_other_location() {
         let path = config_path_from(
-            Some(Path::new("/explicit/fleet.toml")),
+            Some(Path::new("/explicit/minato.toml")),
             Some(Path::new("/xdg")),
             Some(Path::new("/home/user")),
         )
         .unwrap();
 
-        assert_eq!(path, PathBuf::from("/explicit/fleet.toml"));
+        assert_eq!(path, PathBuf::from("/explicit/minato.toml"));
     }
 
     #[test]
@@ -525,18 +525,18 @@ reference = ["github:mcanouil/fleet"]
         let path =
             config_path_from(Some(Path::new("")), None, Some(Path::new("/home/user"))).unwrap();
 
-        assert_eq!(path, PathBuf::from("/home/user/.config/fleet/fleet.toml"));
+        assert_eq!(path, PathBuf::from("/home/user/.config/minato/minato.toml"));
     }
 
     #[test]
     fn falls_back_from_xdg_to_the_home_directory() {
         assert_eq!(
             config_path_from(None, Some(Path::new("/xdg")), Some(Path::new("/home/user"))).unwrap(),
-            PathBuf::from("/xdg/fleet/fleet.toml")
+            PathBuf::from("/xdg/minato/minato.toml")
         );
         assert_eq!(
             config_path_from(None, None, Some(Path::new("/home/user"))).unwrap(),
-            PathBuf::from("/home/user/.config/fleet/fleet.toml")
+            PathBuf::from("/home/user/.config/minato/minato.toml")
         );
     }
 

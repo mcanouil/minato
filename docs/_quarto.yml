@@ -2,10 +2,10 @@ project:
   type: website
 
 website:
-  title: "fleet"
+  title: "minato"
   description: "Overview and sync of Git repositories across hosting providers."
-  site-url: "https://m.canouil.dev/fleet"
-  repo-url: "https://github.com/mcanouil/fleet"
+  site-url: "https://m.canouil.dev/minato"
+  repo-url: "https://github.com/mcanouil/minato"
   repo-actions: [issue, edit]
   navbar:
     left:
@@ -15,7 +15,7 @@ website:
         text: "Design"
     right:
       - icon: github
-        href: "https://github.com/mcanouil/fleet"
+        href: "https://github.com/mcanouil/minato"
         aria-label: "GitHub repository"
   page-footer:
     left: "© 2026 Mickaël Canouil"

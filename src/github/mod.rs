@@ -21,8 +21,8 @@ use schema::{RepositoriesData, Response};
 /// Where the GraphQL API lives.
 const DEFAULT_ENDPOINT: &str = "https://api.github.com/graphql";
 
-/// How `fleet` identifies itself to the API.
-const USER_AGENT: &str = concat!("fleet/", env!("CARGO_PKG_VERSION"));
+/// How `minato` identifies itself to the API.
+const USER_AGENT: &str = concat!("minato/", env!("CARGO_PKG_VERSION"));
 
 /// An account whose repositories are enumerated.
 ///
@@ -72,7 +72,7 @@ impl RetryPolicy {
     }
 }
 
-/// The longest `fleet` will honour a `Retry-After` before giving up instead.
+/// The longest `minato` will honour a `Retry-After` before giving up instead.
 ///
 /// A secondary limit normally clears in under a minute. A far longer wait is
 /// better reported than slept through, so the user can decide.
