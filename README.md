@@ -25,9 +25,16 @@ orgs = []
 
 [local]
 roots = ["~/Projects"]
-layout = "{owner}/{repo}"
+layout = "{repo}"
 protocol = "ssh"
 ```
+
+`roots` are searched for existing clones.
+A clone is matched to a repository by its remote URL rather than by where it sits, so any directory structure works: one root covering categories such as `~/Projects/perso` and `~/Projects/work` is found without listing them.
+
+`layout` only decides the name of a *new* clone beneath the directory it is placed in.
+It defaults to a flat name, because where a repository belongs is a judgement its identity does not carry.
+Use `minato clone --into <directory>` to say where.
 
 A token is never stored here.
 It is read from `MINATO_GITHUB_TOKEN`, then `GITHUB_TOKEN`, then the `gh` CLI, so it stays wherever you already keep it.
@@ -40,7 +47,7 @@ Every command takes `--json` for scripts and agents, and `--refresh` to ignore c
 | --- | --- |
 | `minato list` | Every repository the provider reports, with stars, issues, pull requests, licence, and when it was last pushed. |
 | `minato status` | How local clones stand against the provider: not cloned, in sync, ahead, behind, diverged, or local only, with the reason. |
-| `minato clone` | Clones repositories that have no local copy, into `layout` under the first root. Skips any destination that already exists. |
+| `minato clone` | Clones repositories that have no local copy. `--into <directory>` chooses where they land, defaulting to the first configured root. Skips any destination that already exists. |
 | `minato fetch` | Fetches every clone. Updates remote-tracking refs only, so it never touches a working tree and is always safe to run. |
 | `minato update` | Fast-forwards clones that are strictly behind and have no modified tracked files. Everything else is reported with the reason it was left alone. |
 | `minato refresh` | Discards cached data so the next run asks the provider again. |
