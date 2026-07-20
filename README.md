@@ -32,6 +32,15 @@ protocol = "ssh"
 `roots` are searched for existing clones.
 A clone is matched to a repository by its remote URL rather than by where it sits, so any directory structure works: one root covering categories such as `~/Projects/perso` and `~/Projects/work` is found without listing them.
 
+### Groups
+
+A group is simply a directory beneath a root, so `~/Projects/demo/some-repo` is in the `demo` group with nothing to configure.
+The tree is the source of truth, and the relationship runs both ways: `--group demo` selects what is already there, and `minato clone --into-group demo` puts new clones where that group already lives.
+
+`--group` and `--into-group` are deliberately different.
+The first selects by where a clone already sits; the second says where a new one should go.
+A repository that has not been cloned is in no group, so filtering `clone` by one would match nothing.
+
 `layout` only decides the name of a *new* clone beneath the directory it is placed in.
 It defaults to a flat name, because where a repository belongs is a judgement its identity does not carry.
 Use `minato clone --into <directory>` to say where.
@@ -42,6 +51,9 @@ It is read from `MINATO_GITHUB_TOKEN`, then `GITHUB_TOKEN`, then the `gh` CLI, s
 ## Commands
 
 Every command takes `--json` for scripts and agents, and `--refresh` to ignore cached data.
+
+Commands can be narrowed with `--owner`, `--group`, and `--state`, each repeatable, and combining rather than accumulating: naming an owner and a state requires both.
+`--state drifted` is shorthand for anything not in sync, which is usually what wants attention.
 
 | Command | What it does |
 | --- | --- |

@@ -359,6 +359,7 @@ fn cloning_refuses_to_write_into_an_occupied_destination() {
     let comparison = compare::Comparison {
         id: Some(id),
         path: None,
+        group: None,
         state: compare::State::RemoteOnly,
         local: None,
         remote: None,

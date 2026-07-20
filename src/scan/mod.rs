@@ -75,6 +75,14 @@ pub struct LocalRepo {
     /// Whether tracked files hold uncommitted changes.
     pub dirty: bool,
 
+    /// The group this clone belongs to, taken from the directory it sits in
+    /// beneath its root.
+    ///
+    /// The tree is the source of truth for grouping: a repository under
+    /// `~/Projects/demo` is in the `demo` group without anyone saying so.
+    /// A clone sitting directly in a root has no group.
+    pub group: Option<String>,
+
     /// Whether the working tree holds files git is not tracking.
     ///
     /// Kept apart from [`Self::dirty`] because the two mean different things
@@ -106,6 +114,15 @@ impl LocalRepo {
 /// is missing or unreadable is reported with an absent identity rather than as
 /// a failure, since that is exactly the drift worth surfacing.
 pub fn read(path: &Path) -> Result<LocalRepo, git::GitError> {
+    read_within(path, None)
+}
+
+/// Reads a clone, noting which group it falls in relative to `root`.
+///
+/// # Errors
+///
+/// Returns an error only when `git` itself cannot be run.
+pub fn read_within(path: &Path, root: Option<&Path>) -> Result<LocalRepo, git::GitError> {
     let remote_url = git::run_optional(path, &["remote", "get-url", "origin"]);
 
     let head = read_head(path);
@@ -118,10 +135,27 @@ pub fn read(path: &Path) -> Result<LocalRepo, git::GitError> {
         tracking: read_tracking(path, &head),
         dirty: has_tracked_changes(&status),
         untracked: has_untracked_files(&status),
+        group: root.and_then(|root| group_of(path, root)),
         head,
         remote_url,
         path: path.to_owned(),
     })
+}
+
+/// The group a clone falls in: the first directory beneath its root.
+///
+/// A clone sitting directly in a root has no group, and neither has one whose
+/// path does not lie beneath the root at all.
+fn group_of(path: &Path, root: &Path) -> Option<String> {
+    let relative = path.strip_prefix(root).ok()?;
+    let mut segments = relative.components();
+    let first = segments.next()?;
+
+    // A clone directly in the root is ungrouped: the last segment is the
+    // repository itself, not a group.
+    segments.next()?;
+
+    Some(first.as_os_str().to_string_lossy().into_owned())
 }
 
 /// Whether `git status --porcelain` reported a change to a tracked file.
@@ -215,21 +249,25 @@ pub struct Scan {
 /// they are independent.
 #[must_use]
 pub fn scan(roots: &[PathBuf], max_depth: usize) -> Scan {
-    let mut directories = Vec::new();
+    let mut directories: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut failures = Vec::new();
 
     for root in roots {
-        if let Err(failure) = collect(root, max_depth, &mut directories) {
+        let mut found = Vec::new();
+
+        if let Err(failure) = collect(root, max_depth, &mut found) {
             failures.push(failure);
         }
+
+        directories.extend(found.into_iter().map(|path| (path, root.clone())));
     }
 
     directories.sort();
-    directories.dedup();
+    directories.dedup_by(|left, right| left.0 == right.0);
 
     let mut repositories: Vec<_> = directories
         .par_iter()
-        .filter_map(|directory| read(directory).ok())
+        .filter_map(|(directory, root)| read_within(directory, Some(root)).ok())
         .collect();
 
     repositories.sort_by(|left, right| left.path.cmp(&right.path));

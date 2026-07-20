@@ -17,6 +17,7 @@ use crate::actions::{self, Mode};
 use crate::cache::{Cache, DEFAULT_TTL};
 use crate::compare::{self, Comparison, State, TrackedOwners};
 use crate::config::{self, Config};
+use crate::filter::{self, Filter};
 use crate::github::auth;
 use crate::github::{Account, GitHubClient};
 use crate::model::{Provider, RemoteRepo};
@@ -35,6 +36,19 @@ pub struct Cli {
     /// Ignore cached data and ask the provider again.
     #[arg(long, global = true)]
     pub refresh: bool,
+
+    /// Keep only repositories owned by these accounts.
+    #[arg(long = "owner", global = true, value_name = "OWNER")]
+    pub owners: Vec<String>,
+
+    /// Keep only repositories in these groups, which are the directories
+    /// beneath a root.
+    #[arg(long = "group", global = true, value_name = "GROUP")]
+    pub groups: Vec<String>,
+
+    /// Keep only repositories in these states.
+    #[arg(long = "state", global = true, value_name = "STATE")]
+    pub states: Vec<filter::StateFilter>,
 
     #[command(subcommand)]
     pub command: Command,
@@ -57,6 +71,15 @@ pub enum Command {
         /// carry, so it is chosen here rather than derived.
         #[arg(long, value_name = "DIRECTORY")]
         into: Option<PathBuf>,
+
+        /// Put them in this group, which is the directory that group already
+        /// occupies beneath a root.
+        ///
+        /// This is not the same as the `--group` filter, which selects by
+        /// where a clone already sits. A repository that has not been cloned
+        /// is in no group, so filtering by one would match nothing.
+        #[arg(long = "into-group", value_name = "GROUP", conflicts_with = "into")]
+        group: Option<String>,
 
         /// Report what would be cloned, and change nothing.
         #[arg(long)]
@@ -148,6 +171,17 @@ pub struct Output {
     pub failed: bool,
 }
 
+impl Cli {
+    /// The filter the user asked for.
+    fn filter(&self) -> Filter {
+        Filter {
+            owners: self.owners.clone(),
+            groups: self.groups.clone(),
+            states: self.states.clone(),
+        }
+    }
+}
+
 impl From<String> for Output {
     fn from(text: String) -> Self {
         Self {
@@ -174,6 +208,7 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
         Command::Status => status(cli).await.map(Into::into),
         Command::Clone {
             into,
+            group,
             dry_run,
             shallow,
         } => {
@@ -181,6 +216,7 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
                 cli,
                 Act::Clone {
                     into: into.clone(),
+                    group: group.clone(),
                     shallow: *shallow,
                 },
                 mode(*dry_run),
@@ -196,6 +232,7 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
 enum Act {
     Clone {
         into: Option<PathBuf>,
+        group: Option<String>,
         shallow: bool,
     },
     Fetch,
@@ -217,16 +254,32 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
 
     let roots = config.resolved_roots(paths.home.as_deref())?;
     let scanned = scan::scan(&roots, scan::DEFAULT_MAX_DEPTH);
-    let comparisons = compare::compare(&gathered.remotes, &scanned.repositories, &gathered.tracked);
+    let comparisons = cli.filter().apply(compare::compare(
+        &gathered.remotes,
+        &scanned.repositories,
+        &gathered.tracked,
+    ));
 
     let summary = match action {
-        Act::Clone { into, shallow } => {
-            let destination = match into {
-                Some(into) => into,
-                None => roots
-                    .first()
-                    .cloned()
-                    .ok_or(config::ValidationError::NoRoots)?,
+        Act::Clone {
+            into,
+            group,
+            shallow,
+        } => {
+            let root = roots
+                .first()
+                .cloned()
+                .ok_or(config::ValidationError::NoRoots)?;
+
+            // A group names a directory that already exists somewhere beneath
+            // a root, so cloning into a group means cloning where its
+            // repositories already live rather than repeating the path.
+            let destination = match (into, group) {
+                (Some(into), _) => into,
+                (None, Some(group)) => {
+                    directory_for_group(&roots, &group).unwrap_or_else(|| root.join(&group))
+                }
+                (None, None) => root,
             };
 
             actions::clone_missing(&comparisons, &destination, &config.local, shallow, mode)
@@ -570,13 +623,17 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
     let roots = config.resolved_roots(paths.home.as_deref())?;
     let scanned = scan::scan(&roots, scan::DEFAULT_MAX_DEPTH);
 
-    let comparisons = compare::compare(&gathered.remotes, &scanned.repositories, &gathered.tracked);
+    let comparisons = cli.filter().apply(compare::compare(
+        &gathered.remotes,
+        &scanned.repositories,
+        &gathered.tracked,
+    ));
 
     if cli.json {
         return Ok(serde_json::to_string_pretty(&comparisons)?);
     }
 
-    let mut table = Table::new(["REPOSITORY", "STATE", "NOTES", "PATH"]);
+    let mut table = Table::new(["REPOSITORY", "GROUP", "STATE", "NOTES", "PATH"]);
 
     for comparison in &comparisons {
         table.push([
@@ -584,6 +641,7 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
                 .id
                 .as_ref()
                 .map_or_else(|| "-".to_owned(), ToString::to_string),
+            comparison.group.clone().unwrap_or_else(|| "-".to_owned()),
             describe_state(&comparison.state),
             describe_notes(comparison),
             comparison
@@ -600,6 +658,14 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
     }
 
     Ok(out)
+}
+
+/// Finds the directory a group already occupies beneath one of the roots.
+fn directory_for_group(roots: &[PathBuf], group: &str) -> Option<PathBuf> {
+    roots
+        .iter()
+        .map(|root| root.join(group))
+        .find(|candidate| candidate.is_dir())
 }
 
 /// Adds the cache-age note that keeps stale data honest.
@@ -739,6 +805,36 @@ mod tests {
         };
 
         assert_eq!(into, None, "no destination means use the configured root");
+    }
+
+    #[test]
+    fn a_clone_destination_and_a_group_filter_are_different_things() {
+        let by_group = Cli::try_parse_from(["minato", "clone", "--into-group", "demo"])
+            .expect("a group destination to parse");
+
+        let Command::Clone { group, .. } = &by_group.command else {
+            panic!("expected the clone command");
+        };
+
+        assert_eq!(group.as_deref(), Some("demo"));
+        assert!(
+            by_group.groups.is_empty(),
+            "choosing a destination must not also filter by group"
+        );
+
+        let filtered =
+            Cli::try_parse_from(["minato", "status", "--group", "demo"]).expect("a filter");
+
+        assert_eq!(filtered.groups, ["demo"]);
+    }
+
+    #[test]
+    fn a_destination_and_a_group_cannot_both_be_given() {
+        assert!(
+            Cli::try_parse_from(["minato", "clone", "--into", "/code", "--into-group", "demo"])
+                .is_err(),
+            "two ways of saying where would be ambiguous"
+        );
     }
 
     #[test]
