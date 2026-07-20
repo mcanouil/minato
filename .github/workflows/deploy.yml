@@ -1,0 +1,64 @@
+# @license MIT
+# @copyright 2026 Mickaël Canouil
+# @author Mickaël Canouil
+
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit or ref to build, defaulting to the triggering ref."
+        type: string
+        required: false
+        default: ""
+
+# Only the deploy job touches Pages, and it raises its own permissions.
+permissions:
+  contents: read
+
+# Pages accepts one deployment at a time, so queue rather than cancel: an
+# aborted deployment would leave the published site half-updated.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Render website
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Render
+        run: quarto render docs
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/_site
+
+  deploy:
+    name: Publish to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

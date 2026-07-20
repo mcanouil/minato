@@ -109,6 +109,16 @@ quarto render docs
 CI renders it on every pull request and uploads the result as an artifact.
 Deployment to GitHub Pages is deferred until the repository is public, since Pages on a private repository requires a paid plan.
 
+## Install
+
+Released builds carry a binary for macOS (Apple silicon and Intel), Linux (x86-64 and ARM64), and Windows, alongside the changelog for that version.
+
+```sh
+cargo install --git https://github.com/mcanouil/minato --tag <version>
+```
+
+Or download the archive for your platform from a [release](https://github.com/mcanouil/minato/releases) and put `minato` on your `PATH`.
+
 ## Requirements
 
 - Rust 1.88 or later (edition 2024).

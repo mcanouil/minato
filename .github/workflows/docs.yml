@@ -1,9 +1,8 @@
-name: Documentation
+name: Documentation check
 
+# Deploying to Pages is the Deploy Documentation workflow's job. This one only
+# checks that a change still renders, before it reaches main.
 on:
-  push:
-    branches: [main]
-    paths: ["docs/**", ".github/workflows/docs.yml"]
   pull_request:
     paths: ["docs/**", ".github/workflows/docs.yml"]
 
@@ -31,9 +30,3 @@ jobs:
           name: docs-site
           path: docs/_site
           if-no-files-found: error
-
-# Deployment to GitHub Pages is intentionally not wired up yet.
-# The repository is private, and Pages on a private repository requires a paid
-# plan. The render job above still runs on every pull request, so the site is
-# verified continuously. Add a deploy job using actions/deploy-pages once the
-# repository is public.
