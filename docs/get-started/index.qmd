@@ -1,0 +1,124 @@
+---
+title: "Get started"
+subtitle: "Install it, point it at your accounts, and see what has drifted."
+---
+
+## Install
+
+::: {.panel-tabset}
+
+### With cargo
+
+```{.bash filename="Terminal"}
+cargo install --git https://github.com/mcanouil/minato --tag <version>
+```
+
+### From a released binary
+
+Every [release](https://github.com/mcanouil/minato/releases) carries an archive for macOS on Apple silicon and Intel, Linux on x86-64 and ARM64, and Windows.
+
+```{.bash filename="Terminal"}
+tar -xzf minato-<version>-<target>.tar.gz
+sudo install minato-<version>-<target>/minato /usr/local/bin/minato
+```
+
+On Windows, unzip the archive and put `minato.exe` somewhere on `PATH`.
+
+### From source
+
+```{.bash filename="Terminal"}
+git clone https://github.com/mcanouil/minato && cd minato
+cargo install --path .
+```
+
+:::
+
+`minato` shells out to `git`, so it needs a `git` binary on `PATH`.
+Doing so is deliberate: your SSH agent, credential helpers, and `git` configuration all apply unchanged.
+
+## Authenticate
+
+No token is ever stored by `minato`.
+It reads one from `MINATO_GITHUB_TOKEN`, then `GITHUB_TOKEN`, then the `gh` CLI, so it stays wherever you already keep it.
+
+```{.bash filename="Terminal"}
+gh auth login
+```
+
+Check what it found, without ever printing the token itself:
+
+```{.bash filename="Terminal"}
+minato auth status
+```
+
+```{.default filename="Output"}
+Authenticated to GitHub using the gh CLI.
+```
+
+## Configure
+
+Configuration is TOML at `~/.config/minato/minato.toml`, or wherever `MINATO_CONFIG` points.
+Running `minato doctor` before it exists prints a sample to start from.
+
+```{.toml filename="~/.config/minato/minato.toml"}
+[providers.github]
+users = ["your-username"]
+orgs = []
+
+[local]
+roots = ["~/Projects"]
+layout = "{repo}"
+protocol = "ssh"
+```
+
+`roots` are searched for existing clones.
+A clone is matched to a repository by its remote URL rather than by where it sits, so one root covers any arrangement of folders beneath it.
+
+## Check everything is usable
+
+`doctor` reports on every check rather than stopping at the first problem.
+
+```{.bash filename="Terminal"}
+minato doctor
+```
+
+```{.default filename="Output"}
+    CHECK          DETAIL
+ok  git            2.55.0
+ok  token          found in the gh CLI
+ok  configuration  /Users/you/.config/minato/minato.toml
+ok  roots          /Users/you/Projects
+ok  cache          /Users/you/.cache/minato
+```
+
+## See what has drifted
+
+```{.bash filename="Terminal"}
+minato status --state drifted
+```
+
+Provider responses are cached for fifteen minutes, so a second run is effectively instant, and cached output always says how old it is.
+Add `--refresh` to ask again.
+
+## Close the gap
+
+Every command that changes anything takes `--dry-run` first.
+
+```{.bash filename="Terminal"}
+minato fetch                      # always safe: never touches a working tree
+minato update --dry-run           # see what would be fast-forwarded
+minato update                     # do it
+```
+
+`update` fast-forwards only what is strictly behind and has no modified tracked files.
+Everything else is reported with the reason.
+
+## Browse it instead
+
+```{.bash filename="Terminal"}
+minato tui
+```
+
+Every action the interface offers calls the same function the matching command calls, so nothing can be done there that cannot be scripted.
+
+[See every command](../reference/index.qmd){.btn .btn-primary}

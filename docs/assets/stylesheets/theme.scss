@@ -1,0 +1,278 @@
+/*-- scss:defaults --*/
+// @license MIT
+// @copyright 2026 Mickaël Canouil
+// @author Mickaël Canouil
+
+// Palette tokens, kept in sync with docs/_brand.yml. Brand compiles the real
+// values per colour scheme, so these are fallbacks and a place for the rules
+// below to refer to a colour by name.
+$deep-water: #0c1620;
+$slack-water: #132430;
+$mist: #f7f9fb;
+$ink: #16242f;
+$foam: #e6edf3;
+$harbour: #0e6e7d;
+$harbour-light: #4fb3c4;
+$lantern: #c2661b;
+$lantern-light: #f0a555;
+$rope: #2a4a5c;
+$rope-light: #8fa9b8;
+$moss: #2f7d5c;
+$moss-light: #5fbf92;
+$signal: #b23a2b;
+$signal-light: #e8776a;
+
+$font-family-sans-serif: "Inter", "Helvetica Neue", Arial, sans-serif !default;
+$font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace !default;
+$headings-font-family: "Outfit", $font-family-sans-serif !default;
+$headings-font-weight: 600 !default;
+$headings-line-height: 1.25 !default;
+
+$border-radius: 0.5rem !default;
+$border-radius-sm: 0.3rem !default;
+$border-radius-lg: 0.875rem !default;
+
+$box-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05) !default;
+$box-shadow: 0 2px 4px rgb(0 0 0 / 0.05), 0 8px 24px rgb(0 0 0 / 0.07) !default;
+$box-shadow-lg: 0 4px 8px rgb(0 0 0 / 0.06), 0 20px 48px rgb(0 0 0 / 0.09) !default;
+
+// Brand wins over these; they only matter if brand is ever removed.
+$primary: $harbour !default;
+$secondary: $rope !default;
+$success: $moss !default;
+$warning: $lantern !default;
+$danger: $signal !default;
+$info: $harbour !default;
+
+$code-color: $lantern !default;
+$link-decoration: none !default;
+
+/*-- scss:mixins --*/
+
+// One definition for both schemes: the dark values apply whenever the page is
+// in dark mode, however that was decided.
+@mixin when-dark {
+  .quarto-dark & {
+    @content;
+  }
+}
+
+/*-- scss:rules --*/
+
+// The landing page introduction. A harbour at dusk, as a gradient rather than
+// an image, so it costs nothing to load and cannot look wrong at any width.
+.hero {
+  padding: clamp(2.5rem, 8vw, 5.5rem) 0 clamp(2rem, 5vw, 3.5rem);
+  background: linear-gradient(180deg, rgb(14 110 125 / 0.09) 0%, transparent 100%);
+  border-bottom: 1px solid rgb(42 74 92 / 0.12);
+  margin-bottom: 2.5rem;
+
+  @include when-dark {
+    background: linear-gradient(180deg, rgb(79 179 196 / 0.12) 0%, transparent 100%);
+    border-bottom-color: rgb(143 169 184 / 0.18);
+  }
+}
+
+.hero-content {
+  max-width: 46rem;
+
+  h1,
+  h2 {
+    font-size: clamp(2.25rem, 6vw, 3.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.75rem;
+    border-bottom: none;
+  }
+
+  .lead {
+    font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+    color: $rope;
+    margin-bottom: 1.75rem;
+
+    @include when-dark {
+      color: $rope-light;
+    }
+  }
+
+  .btn {
+    margin: 0 0.5rem 0.5rem 0;
+    padding: 0.6rem 1.4rem;
+    font-weight: 500;
+  }
+}
+
+// State names carry the same colour here as they do in the terminal, so that
+// reading the documentation teaches the output rather than competing with it.
+.states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 2rem;
+  font-family: $font-family-monospace;
+  font-size: 0.85rem;
+  border: 1px solid currentcolor;
+
+  &::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: currentcolor;
+  }
+
+  &.state-sync {
+    color: $moss;
+
+    @include when-dark {
+      color: $moss-light;
+    }
+  }
+
+  &.state-behind,
+  &.state-ahead {
+    color: $lantern;
+
+    @include when-dark {
+      color: $lantern-light;
+    }
+  }
+
+  &.state-diverged {
+    color: $signal;
+
+    @include when-dark {
+      color: $signal-light;
+    }
+  }
+
+  &.state-uncloned {
+    color: $harbour;
+
+    @include when-dark {
+      color: $harbour-light;
+    }
+  }
+}
+
+// Feature summary on the landing page.
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.25rem;
+  margin: 2rem 0;
+}
+
+.card-item {
+  padding: 1.25rem 1.35rem;
+  border: 1px solid rgb(42 74 92 / 0.15);
+  border-radius: $border-radius-lg;
+  background: rgb(255 255 255 / 0.6);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  h3 {
+    font-size: 1.05rem;
+    margin: 0 0 0.5rem;
+    color: $harbour;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.94rem;
+    color: $rope;
+  }
+
+  &:hover {
+    border-color: rgb(14 110 125 / 0.45);
+    box-shadow: $box-shadow-sm;
+  }
+
+  @include when-dark {
+    border-color: rgb(143 169 184 / 0.2);
+    background: rgb(19 36 48 / 0.55);
+
+    h3 {
+      color: $harbour-light;
+    }
+
+    p {
+      color: $rope-light;
+    }
+
+    &:hover {
+      border-color: rgb(79 179 196 / 0.5);
+    }
+  }
+}
+
+// Navigation and chrome.
+.navbar {
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+
+  .navbar-brand {
+    font-family: $headings-font-family;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+}
+
+.navbar-title {
+  font-family: $headings-font-family;
+  font-weight: 700;
+}
+
+// Code blocks read as terminal output, which is most of what this tool
+// produces, without pretending to be an interactive terminal.
+div.sourceCode {
+  border-radius: $border-radius;
+  border: 1px solid rgb(42 74 92 / 0.14);
+
+  @include when-dark {
+    border-color: rgb(143 169 184 / 0.16);
+  }
+}
+
+pre code {
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+// Tables carry a lot of this site's meaning, so give them room and rules.
+.table > :not(caption) > * > * {
+  padding: 0.6rem 0.75rem;
+}
+
+table {
+  font-size: 0.94rem;
+
+  thead th {
+    font-family: $headings-font-family;
+    font-weight: 600;
+    border-bottom: 2px solid rgb(42 74 92 / 0.2);
+
+    @include when-dark {
+      border-bottom-color: rgb(143 169 184 / 0.25);
+    }
+  }
+}
+
+// The GitHub widget the navbar script injects.
+.github-widget-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.footer {
+  font-size: 0.9rem;
+}
