@@ -271,6 +271,204 @@ pub fn update_all(comparisons: &[Comparison], mode: Mode) -> Summary {
     Summary { reports }
 }
 
+/// Why a repository could not be moved.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum MoveError {
+    /// No repository matched what was asked for.
+    #[error("no repository matches `{wanted}`; run `minato status` to see what there is")]
+    NoMatch {
+        /// What was asked for.
+        wanted: String,
+    },
+
+    /// More than one repository matched, so the choice would be a guess.
+    #[error("`{wanted}` matches {count} repositories; name one of them exactly: {matches}")]
+    Ambiguous {
+        /// What was asked for.
+        wanted: String,
+        /// How many matched.
+        count: usize,
+        /// The ones that matched.
+        matches: String,
+    },
+
+    /// The repository has no local clone to move.
+    #[error("`{wanted}` has no local clone to move; clone it first")]
+    NotCloned {
+        /// What was asked for.
+        wanted: String,
+    },
+
+    /// The clone does not sit under a configured root.
+    #[error(
+        "`{}` is not under any configured root, so there is no group tree to move it within",
+        path.display()
+    )]
+    OutsideRoots {
+        /// Where the clone is.
+        path: PathBuf,
+    },
+
+    /// Something already occupies the destination.
+    #[error("`{}` already exists; nothing was moved", destination.display())]
+    DestinationExists {
+        /// Where it would have gone.
+        destination: PathBuf,
+    },
+
+    /// It is already where it was asked to go.
+    #[error("`{wanted}` is already in `{group}`")]
+    AlreadyThere {
+        /// What was asked for.
+        wanted: String,
+        /// The group it is already in.
+        group: String,
+    },
+
+    /// The move itself failed.
+    #[error("cannot move `{}` to `{}`: {message}", from.display(), to.display())]
+    Failed {
+        /// Where it was.
+        from: PathBuf,
+        /// Where it was going.
+        to: PathBuf,
+        /// What the operating system reported.
+        message: String,
+    },
+}
+
+/// Where a repository would end up when moved into a group.
+///
+/// It keeps its directory name, which is not always the repository name: a
+/// clone matched by its remote can sit in a directory called anything.
+#[must_use]
+pub fn move_destination(path: &Path, root: &Path, group: &str) -> PathBuf {
+    let name = path
+        .file_name()
+        .map_or_else(|| path.to_owned(), PathBuf::from);
+
+    root.join(group).join(name)
+}
+
+/// Finds the one repository the user meant.
+///
+/// Matching is deliberately strict about ambiguity: moving the wrong
+/// repository is a filesystem change, so a guess is worse than a question.
+///
+/// # Errors
+///
+/// Returns an error when nothing matches, or when more than one does.
+pub fn find_one<'a>(
+    comparisons: &'a [Comparison],
+    wanted: &str,
+) -> Result<&'a Comparison, MoveError> {
+    let lowered = wanted.to_lowercase();
+
+    let matches: Vec<&Comparison> = comparisons
+        .iter()
+        .filter(|comparison| {
+            comparison.id.as_ref().is_some_and(|id| {
+                id.to_string() == lowered
+                    || id.name == lowered
+                    || format!("{}/{}", id.owner, id.name) == lowered
+            })
+        })
+        .collect();
+
+    match matches.len() {
+        0 => Err(MoveError::NoMatch {
+            wanted: wanted.to_owned(),
+        }),
+        1 => Ok(matches[0]),
+        count => Err(MoveError::Ambiguous {
+            wanted: wanted.to_owned(),
+            count,
+            matches: matches
+                .iter()
+                .filter_map(|comparison| comparison.id.as_ref())
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        }),
+    }
+}
+
+/// Moves one repository into a group, which means moving its directory.
+///
+/// A clone does not care where it sits, so this is a plain rename. It is still
+/// a change to the user's filesystem, so it is explicit, one repository at a
+/// time, and refuses anything it would have to overwrite.
+///
+/// # Errors
+///
+/// Returns an error when the repository cannot be identified, has no clone,
+/// sits outside every root, is already there, or when the move itself fails.
+pub fn move_to_group(
+    comparison: &Comparison,
+    wanted: &str,
+    roots: &[PathBuf],
+    group: &str,
+    mode: Mode,
+) -> Result<Report, MoveError> {
+    let Some(path) = comparison.path.clone() else {
+        return Err(MoveError::NotCloned {
+            wanted: wanted.to_owned(),
+        });
+    };
+
+    if comparison.group.as_deref() == Some(group) {
+        return Err(MoveError::AlreadyThere {
+            wanted: wanted.to_owned(),
+            group: group.to_owned(),
+        });
+    }
+
+    let root = roots
+        .iter()
+        .find(|root| path.starts_with(root))
+        .ok_or_else(|| MoveError::OutsideRoots { path: path.clone() })?;
+
+    let destination = move_destination(&path, root, group);
+
+    if destination.exists() {
+        return Err(MoveError::DestinationExists { destination });
+    }
+
+    let detail = format!("move {} to {}", path.display(), destination.display());
+
+    let outcome = match mode {
+        Mode::DryRun => Outcome::Would { detail },
+        Mode::Execute => {
+            if let Some(parent) = destination.parent()
+                && let Err(error) = std::fs::create_dir_all(parent)
+            {
+                return Err(MoveError::Failed {
+                    from: path,
+                    to: destination,
+                    message: error.to_string(),
+                });
+            }
+
+            match std::fs::rename(&path, &destination) {
+                Ok(()) => Outcome::Done { detail },
+                Err(error) => {
+                    return Err(MoveError::Failed {
+                        from: path,
+                        to: destination,
+                        message: error.to_string(),
+                    });
+                }
+            }
+        }
+    };
+
+    Ok(Report {
+        id: comparison.id.clone(),
+        path: Some(destination),
+        outcome,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,5 +643,209 @@ mod tests {
         assert!(summary.has_failures());
         assert_eq!(summary.counts().done, 1);
         assert_eq!(summary.counts().failed, 1);
+    }
+}
+
+#[cfg(test)]
+mod moving {
+    use super::*;
+    use crate::compare::State;
+    use crate::model::Provider;
+
+    fn cloned(name: &str, group: Option<&str>, path: &str) -> Comparison {
+        Comparison {
+            id: Some(RepoId::new(Provider::GitHub, "mcanouil", name)),
+            path: Some(PathBuf::from(path)),
+            group: group.map(ToOwned::to_owned),
+            state: State::InSync,
+            upstream: None,
+            local: None,
+            remote: None,
+        }
+    }
+
+    fn roots() -> Vec<PathBuf> {
+        vec![PathBuf::from("/code")]
+    }
+
+    #[test]
+    fn a_repository_keeps_its_directory_name_when_it_moves() {
+        // The directory is not always named after the repository, since a clone
+        // is matched by its remote rather than by where it sits.
+        assert_eq!(
+            move_destination(
+                Path::new("/code/old/quarto-vscode"),
+                Path::new("/code"),
+                "new"
+            ),
+            PathBuf::from("/code/new/quarto-vscode")
+        );
+    }
+
+    #[test]
+    fn a_repository_can_be_named_by_id_owner_and_name_or_bare_name() {
+        let all = [cloned("minato", Some("perso"), "/code/perso/minato")];
+
+        for wanted in ["github:mcanouil/minato", "mcanouil/minato", "minato"] {
+            assert!(
+                find_one(&all, wanted).is_ok(),
+                "`{wanted}` should identify the repository"
+            );
+        }
+    }
+
+    #[test]
+    fn naming_something_that_matches_nothing_says_so() {
+        let all = [cloned("minato", Some("perso"), "/code/perso/minato")];
+
+        assert!(matches!(
+            find_one(&all, "nonexistent"),
+            Err(MoveError::NoMatch { .. })
+        ));
+    }
+
+    #[test]
+    fn an_ambiguous_name_is_refused_rather_than_guessed() {
+        let all = [
+            cloned("quarto", Some("a"), "/code/a/quarto"),
+            Comparison {
+                id: Some(RepoId::new(Provider::GitHub, "other-owner", "quarto")),
+                path: Some(PathBuf::from("/code/b/quarto")),
+                group: Some("b".to_owned()),
+                state: State::InSync,
+                upstream: None,
+                local: None,
+                remote: None,
+            },
+        ];
+
+        let error = find_one(&all, "quarto").expect_err("ambiguity");
+
+        assert!(matches!(error, MoveError::Ambiguous { count: 2, .. }));
+        assert!(
+            error.to_string().contains("other-owner"),
+            "the error should list what matched, got: {error}"
+        );
+    }
+
+    #[test]
+    fn a_rehearsal_moves_nothing() {
+        let repository = cloned("minato", Some("old"), "/code/old/minato");
+
+        let report =
+            move_to_group(&repository, "minato", &roots(), "new", Mode::DryRun).expect("a plan");
+
+        assert!(matches!(report.outcome, Outcome::Would { .. }));
+        assert_eq!(report.path, Some(PathBuf::from("/code/new/minato")));
+    }
+
+    #[test]
+    fn a_repository_already_in_the_group_is_not_moved_onto_itself() {
+        let repository = cloned("minato", Some("perso"), "/code/perso/minato");
+
+        assert!(matches!(
+            move_to_group(&repository, "minato", &roots(), "perso", Mode::DryRun),
+            Err(MoveError::AlreadyThere { .. })
+        ));
+    }
+
+    #[test]
+    fn a_repository_with_no_clone_cannot_be_moved() {
+        let mut repository = cloned("minato", None, "/code/perso/minato");
+        repository.path = None;
+
+        assert!(matches!(
+            move_to_group(&repository, "minato", &roots(), "new", Mode::DryRun),
+            Err(MoveError::NotCloned { .. })
+        ));
+    }
+
+    #[test]
+    fn a_clone_outside_every_root_has_no_group_tree_to_move_within() {
+        let repository = cloned("minato", None, "/elsewhere/minato");
+
+        assert!(matches!(
+            move_to_group(&repository, "minato", &roots(), "new", Mode::DryRun),
+            Err(MoveError::OutsideRoots { .. })
+        ));
+    }
+
+    #[test]
+    fn an_occupied_destination_is_refused_and_nothing_is_touched() {
+        let root = tempfile::tempdir().expect("a temporary directory");
+        let source = root.path().join("old/minato");
+        let occupied = root.path().join("new/minato");
+
+        std::fs::create_dir_all(&source).expect("the source");
+        std::fs::create_dir_all(&occupied).expect("the destination");
+        std::fs::write(occupied.join("precious.txt"), "keep me").expect("a file");
+
+        let repository = Comparison {
+            id: Some(RepoId::new(Provider::GitHub, "mcanouil", "minato")),
+            path: Some(source.clone()),
+            group: Some("old".to_owned()),
+            state: State::InSync,
+            upstream: None,
+            local: None,
+            remote: None,
+        };
+
+        let error = move_to_group(
+            &repository,
+            "minato",
+            &[root.path().to_owned()],
+            "new",
+            Mode::Execute,
+        )
+        .expect_err("a refusal");
+
+        assert!(matches!(error, MoveError::DestinationExists { .. }));
+        assert!(source.exists(), "the source must be left where it was");
+        assert_eq!(
+            std::fs::read_to_string(occupied.join("precious.txt")).expect("the file"),
+            "keep me",
+            "whatever was already there must be untouched"
+        );
+    }
+
+    #[test]
+    fn moving_relocates_the_directory_and_creates_the_group() {
+        let root = tempfile::tempdir().expect("a temporary directory");
+        let source = root.path().join("old/minato");
+        std::fs::create_dir_all(source.join(".git")).expect("the source");
+        std::fs::write(source.join("file.txt"), "contents").expect("a file");
+
+        let repository = Comparison {
+            id: Some(RepoId::new(Provider::GitHub, "mcanouil", "minato")),
+            path: Some(source.clone()),
+            group: Some("old".to_owned()),
+            state: State::InSync,
+            upstream: None,
+            local: None,
+            remote: None,
+        };
+
+        let report = move_to_group(
+            &repository,
+            "minato",
+            &[root.path().to_owned()],
+            "new",
+            Mode::Execute,
+        )
+        .expect("the move to succeed");
+
+        let destination = root.path().join("new/minato");
+
+        assert!(matches!(report.outcome, Outcome::Done { .. }));
+        assert!(!source.exists(), "the old location should be gone");
+        assert!(
+            destination.join(".git").exists(),
+            "it should still be a clone"
+        );
+        assert_eq!(
+            std::fs::read_to_string(destination.join("file.txt")).expect("the file"),
+            "contents",
+            "its contents must survive the move"
+        );
     }
 }
