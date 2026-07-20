@@ -1,0 +1,30 @@
+# @license MIT
+# @copyright 2026 Mickaël Canouil
+# @author Mickaël Canouil
+
+name: Setup Git User
+description: Configure the git user identity from a GitHub App token.
+
+inputs:
+  token:
+    description: "A GitHub App token."
+    required: true
+  app-slug:
+    description: "The app slug paired with the token, such as `mcanouil-dev`."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure git identity
+      shell: bash
+      env:
+        APP_SLUG: ${{ inputs.app-slug }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        # Commits are attributed to the App rather than to a person, so that a
+        # release is plainly machine-made and cannot be mistaken for hand work.
+        USER_ID=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+        git config --global user.name "${APP_SLUG}[bot]"
+        git config --global user.email "${USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"

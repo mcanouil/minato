@@ -1,0 +1,375 @@
+# @license MIT
+# @copyright 2026 Mickaël Canouil
+# @author Mickaël Canouil
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: choice
+        description: "Version bump, applied when 'Create release' is ticked"
+        default: "minor"
+        options:
+          - "patch"
+          - "minor"
+          - "major"
+      create_release:
+        type: boolean
+        description: "Bump the version, tag, build binaries, and create a release"
+        default: true
+      deploy_pages:
+        type: boolean
+        description: "Deploy the documentation to GitHub Pages"
+        default: true
+
+permissions:
+  contents: read
+
+# Serialise releases and never cancel one in flight: aborting midway could
+# leave the bump merged but the tag and release absent.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Check before releasing
+    if: ${{ inputs.create_release || inputs.deploy_pages }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Lint
+        run: cargo clippy --locked --all-targets
+
+      - name: Test
+        run: cargo test --locked
+
+  bump-version:
+    name: Bump version
+    needs: validate
+    if: ${{ inputs.create_release }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    env:
+      BRANCH: ci/bump-version
+      BUMP: ${{ inputs.version }}
+
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      commit_sha: ${{ steps.bump.outputs.commit_sha }}
+      pr_url: ${{ steps.bump.outputs.pr_url }}
+
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set up git identity
+        uses: ./.github/actions/setup-git-user
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          app-slug: ${{ steps.app-token.outputs.app-slug }}
+
+      - name: Compute the next version and update sources
+        id: bump
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CURRENT=$(grep -m1 -E '^version[[:space:]]*=' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT}"
+          case "${BUMP}" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+            *) echo "::error::Unknown bump: ${BUMP}"; exit 1 ;;
+          esac
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          DATE=$(date -u +%Y-%m-%d)
+
+          if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null 2>&1; then
+            git push origin --delete "${BRANCH}"
+          fi
+          git checkout -b "${BRANCH}"
+
+          sed -E -i '0,/^version[[:space:]]*=/s/^(version[[:space:]]*=[[:space:]]*")[^"]+/\1'"${VERSION}"'/' Cargo.toml
+          sed -E -i 's/^(version:[[:space:]]*).*/\1'"${VERSION}"'/' CITATION.cff
+          sed -E -i 's/^(date-released:[[:space:]]*).*/\1"'"${DATE}"'"/' CITATION.cff
+          sed -i "s/^## \[Unreleased\]/## ${VERSION} (${DATE})/" CHANGELOG.md
+
+          # Keep the lockfile's own record of the version in step, so that a
+          # release commit does not leave the tree dirty on the next build.
+          cargo update --workspace --offline || cargo update --workspace
+
+          git add Cargo.toml Cargo.lock CITATION.cff CHANGELOG.md
+          git commit -m "ci: bump version to ${VERSION} :rocket:"
+          git push --force origin "${BRANCH}"
+
+          sleep 5
+          PR_URL=$(gh pr create \
+            --fill-first \
+            --base "${GITHUB_REF_NAME}" \
+            --head "${BRANCH}" \
+            --label "Type: CI/CD :robot:")
+
+          sleep 5
+          merged=false
+          for attempt in {1..10}; do
+            if gh pr merge --squash --delete-branch "${BRANCH}"; then
+              merged=true
+              break
+            fi
+            echo "Bump pull request not mergeable yet (attempt ${attempt}/10); retrying in 6s."
+            sleep 6
+          done
+          if [ "${merged}" != "true" ]; then
+            echo "::error::Could not merge the bump pull request ${PR_URL}."
+            exit 1
+          fi
+
+          COMMIT_SHA=""
+          for attempt in {1..10}; do
+            COMMIT_SHA=$(gh pr view "${PR_URL}" --json mergeCommit --jq '.mergeCommit.oid // empty')
+            [ -n "${COMMIT_SHA}" ] && break
+            sleep 3
+          done
+          if [ -z "${COMMIT_SHA}" ]; then
+            echo "::error::Could not resolve the merge commit for ${PR_URL}."
+            exit 1
+          fi
+
+          {
+            echo "version=${VERSION}"
+            echo "commit_sha=${COMMIT_SHA}"
+            echo "pr_url=${PR_URL}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: bump-version
+    if: ${{ inputs.create_release }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # Build the bump commit rather than the triggering ref, which still
+      # carries the previous version number.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.bump-version.outputs.commit_sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Package
+        shell: bash
+        env:
+          VERSION: ${{ needs.bump-version.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          NAME="minato-${VERSION}-${TARGET}"
+          mkdir -p "dist/${NAME}"
+
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            cp "target/${TARGET}/release/minato.exe" "dist/${NAME}/"
+          else
+            cp "target/${TARGET}/release/minato" "dist/${NAME}/"
+          fi
+          cp README.md LICENSE CHANGELOG.md "dist/${NAME}/"
+
+          cd dist
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            7z a "${NAME}.zip" "${NAME}" >/dev/null
+          else
+            tar --create --gzip --file "${NAME}.tar.gz" "${NAME}"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: minato-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  github-release:
+    name: Create the release
+    needs: [bump-version, build]
+    if: ${{ inputs.create_release }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      VERSION: ${{ needs.bump-version.outputs.version }}
+
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.bump-version.outputs.commit_sha }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Assemble the release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # What changed comes from the changelog rather than from commit
+          # subjects, because the changelog is written for the reader.
+          awk -v heading="## ${VERSION}" '
+            index($0, heading) == 1 { flag = 1; next }
+            /^## / && flag { flag = 0 }
+            flag
+          ' CHANGELOG.md | sed '/./,$!d' > changes.md
+
+          if [ ! -s changes.md ]; then
+            echo "::error::No changelog entry found for ${VERSION}."
+            exit 1
+          fi
+
+          # Every release says how to install it, so the assets below are not
+          # left to be interpreted.
+          {
+            echo "## Install"
+            echo
+            echo "### With cargo"
+            echo
+            echo '```sh'
+            echo "cargo install --git https://github.com/mcanouil/minato --tag ${VERSION}"
+            echo '```'
+            echo
+            echo "### From a released binary"
+            echo
+            echo "Download the archive for your platform below, then:"
+            echo
+            echo '```sh'
+            echo "tar -xzf minato-${VERSION}-<target>.tar.gz"
+            echo "sudo install minato-${VERSION}-<target>/minato /usr/local/bin/minato"
+            echo '```'
+            echo
+            echo "On Windows, unzip the archive and put \`minato.exe\` somewhere on \`PATH\`."
+            echo
+            echo "| Platform | Archive |"
+            echo "| --- | --- |"
+            echo "| macOS, Apple silicon | \`minato-${VERSION}-aarch64-apple-darwin.tar.gz\` |"
+            echo "| macOS, Intel | \`minato-${VERSION}-x86_64-apple-darwin.tar.gz\` |"
+            echo "| Linux, x86-64 | \`minato-${VERSION}-x86_64-unknown-linux-gnu.tar.gz\` |"
+            echo "| Linux, ARM64 | \`minato-${VERSION}-aarch64-unknown-linux-gnu.tar.gz\` |"
+            echo "| Windows, x86-64 | \`minato-${VERSION}-x86_64-pc-windows-msvc.zip\` |"
+            echo
+            echo "### From source"
+            echo
+            echo '```sh'
+            echo "git clone https://github.com/mcanouil/minato && cd minato"
+            echo "cargo install --path ."
+            echo '```'
+            echo
+            echo "## What changed"
+            echo
+          } > notes.md
+          cat changes.md >> notes.md
+
+      - name: Create the GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "${VERSION}" \
+            --target "${{ needs.bump-version.outputs.commit_sha }}" \
+            --title "${VERSION}" \
+            --notes-file notes.md \
+            dist/*.tar.gz dist/*.zip
+          echo "url=$(gh release view "${VERSION}" --json url --jq .url)" >> "${GITHUB_OUTPUT}"
+
+      - name: Summary
+        shell: bash
+        env:
+          URL: ${{ steps.release.outputs.url }}
+        run: |
+          {
+            echo "## Release"
+            echo
+            echo "- Tag: \`${VERSION}\`"
+            echo "- Release: ${URL}"
+            echo "- Assets: five platform archives, each carrying the binary, README, LICENSE, and changelog."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  pages:
+    name: Deploy the documentation
+    needs: [validate, bump-version, github-release]
+    if: >-
+      ${{ always()
+        && needs.validate.result == 'success'
+        && needs.bump-version.result != 'failure' && needs.bump-version.result != 'cancelled'
+        && needs.github-release.result != 'failure' && needs.github-release.result != 'cancelled'
+        && inputs.deploy_pages }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    # Build the bump commit rather than the triggering ref: the latter still
+    # says "Unreleased" in the changelog, so the published site would not show
+    # the version that was just released. Empty on a deploy-only run.
+    with:
+      ref: ${{ needs.bump-version.outputs.commit_sha }}
