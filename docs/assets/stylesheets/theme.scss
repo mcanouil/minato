@@ -4,13 +4,15 @@
 // @author Mickaël Canouil
 
 // Palette tokens, kept in sync with docs/_brand.yml. Brand compiles the real
-// values per colour scheme, so these are fallbacks and a place for the rules
-// below to refer to a colour by name.
+// values per colour scheme; these name them for the rules below.
 $deep-water: #0c1620;
-$slack-water: #132430;
+$slack-water: #152836;
 $mist: #f7f9fb;
+$surface-light: #ffffff;
 $ink: #16242f;
 $foam: #e6edf3;
+$muted-light: #4d6472;
+$muted-dark: #93a9b7;
 $harbour: #0e6e7d;
 $harbour-light: #4fb3c4;
 $lantern: #c2661b;
@@ -32,11 +34,6 @@ $border-radius: 0.5rem !default;
 $border-radius-sm: 0.3rem !default;
 $border-radius-lg: 0.875rem !default;
 
-$box-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05) !default;
-$box-shadow: 0 2px 4px rgb(0 0 0 / 0.05), 0 8px 24px rgb(0 0 0 / 0.07) !default;
-$box-shadow-lg: 0 4px 8px rgb(0 0 0 / 0.06), 0 20px 48px rgb(0 0 0 / 0.09) !default;
-
-// Brand wins over these; they only matter if brand is ever removed.
 $primary: $harbour !default;
 $secondary: $rope !default;
 $success: $moss !default;
@@ -44,83 +41,130 @@ $warning: $lantern !default;
 $danger: $signal !default;
 $info: $harbour !default;
 
-$code-color: $lantern !default;
 $link-decoration: none !default;
 
 /*-- scss:mixins --*/
 
-// One definition for both schemes: the dark values apply whenever the page is
-// in dark mode, however that was decided.
-@mixin when-dark {
-  .quarto-dark & {
-    @content;
-  }
+// The shared shell for every control in the navbar's right-hand group: the
+// GitHub widget, the search button, and the colour-scheme toggle. Without one
+// definition they drift apart, which is what made the widget look wrong.
+@mixin pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--mn-surface);
+  border: 1px solid var(--mn-hairline);
+  border-radius: var(--mn-radius-sm);
+  color: var(--mn-ink) !important;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 150ms var(--mn-ease), border-color 150ms var(--mn-ease),
+    color 150ms var(--mn-ease);
+}
+
+@mixin pill-button-active {
+  background: var(--mn-tint-primary);
+  border-color: var(--mn-primary);
+  color: var(--mn-primary) !important;
 }
 
 /*-- scss:rules --*/
 
-// The landing page introduction. A harbour at dusk, as a gradient rather than
-// an image, so it costs nothing to load and cannot look wrong at any width.
-.hero {
-  padding: clamp(2.5rem, 8vw, 5.5rem) 0 clamp(2rem, 5vw, 3.5rem);
-  background: linear-gradient(180deg, rgb(14 110 125 / 0.09) 0%, transparent 100%);
-  border-bottom: 1px solid rgb(42 74 92 / 0.12);
-  margin-bottom: 2.5rem;
+// Custom properties rather than SCSS variables, because the navbar and the
+// widget have to follow whichever colour scheme is active at the time, which
+// SCSS cannot know at compile time.
+:root {
+  --mn-radius-sm: 0.3rem;
+  --mn-radius-md: 0.5rem;
+  --mn-radius-lg: 0.875rem;
+  --mn-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 
-  @include when-dark {
-    background: linear-gradient(180deg, rgb(79 179 196 / 0.12) 0%, transparent 100%);
-    border-bottom-color: rgb(143 169 184 / 0.18);
-  }
+:root,
+[data-bs-theme="light"],
+.quarto-light {
+  --mn-paper: #{$mist};
+  --mn-surface: #{$surface-light};
+  --mn-ink: #{$ink};
+  --mn-muted: #{$muted-light};
+  --mn-primary: #{$harbour};
+  --mn-secondary: #{$rope};
+  --mn-warning: #{$lantern};
+  --mn-success: #{$moss};
+  --mn-danger: #{$signal};
+  --mn-hairline: rgb(22 36 47 / 0.12);
+  --mn-tint-primary: rgb(14 110 125 / 0.1);
+  --mn-shadow-soft: 0 2px 4px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.06);
+}
+
+[data-bs-theme="dark"],
+.quarto-dark {
+  --mn-paper: #{$deep-water};
+  --mn-surface: #{$slack-water};
+  --mn-ink: #{$foam};
+  --mn-muted: #{$muted-dark};
+  --mn-primary: #{$harbour-light};
+  --mn-secondary: #{$rope-light};
+  --mn-warning: #{$lantern-light};
+  --mn-success: #{$moss-light};
+  --mn-danger: #{$signal-light};
+  --mn-hairline: rgb(143 169 184 / 0.2);
+  --mn-tint-primary: rgb(79 179 196 / 0.14);
+  --mn-shadow-soft: 0 2px 4px rgb(0 0 0 / 0.2), 0 8px 24px rgb(0 0 0 / 0.3);
+}
+
+// --- Landing page. --------------------------------------------------------
+
+.hero {
+  padding: clamp(2.5rem, 8vw, 5rem) 0 clamp(1.5rem, 4vw, 2.5rem);
+  background: linear-gradient(180deg, var(--mn-tint-primary) 0%, transparent 100%);
+  border-bottom: 1px solid var(--mn-hairline);
+  margin-bottom: 2.5rem;
 }
 
 .hero-content {
   max-width: 46rem;
 
-  h1,
-  h2 {
+  h1 {
     font-size: clamp(2.25rem, 6vw, 3.5rem);
     font-weight: 700;
     letter-spacing: -0.02em;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
     border-bottom: none;
   }
 
   .lead {
+    display: block;
     font-size: clamp(1.05rem, 2.4vw, 1.3rem);
-    color: $rope;
-    margin-bottom: 1.75rem;
-
-    @include when-dark {
-      color: $rope-light;
-    }
+    color: var(--mn-primary);
+    font-weight: 500;
+    margin-bottom: 1.25rem;
   }
 
   .btn {
-    margin: 0 0.5rem 0.5rem 0;
+    margin: 0.5rem 0.5rem 0 0;
     padding: 0.6rem 1.4rem;
     font-weight: 500;
   }
 }
 
-// State names carry the same colour here as they do in the terminal, so that
-// reading the documentation teaches the output rather than competing with it.
+// State names carry the same colour here as in the terminal, so reading the
+// documentation teaches the output rather than competing with it.
 .states {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin: 1.5rem 0;
-  padding: 0;
-  list-style: none;
 }
 
 .state {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.3rem 0.7rem;
+  padding: 0.25rem 0.7rem;
   border-radius: 2rem;
   font-family: $font-family-monospace;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   border: 1px solid currentcolor;
 
   &::before {
@@ -132,40 +176,23 @@ $link-decoration: none !default;
   }
 
   &.state-sync {
-    color: $moss;
-
-    @include when-dark {
-      color: $moss-light;
-    }
+    color: var(--mn-success);
   }
 
   &.state-behind,
   &.state-ahead {
-    color: $lantern;
-
-    @include when-dark {
-      color: $lantern-light;
-    }
+    color: var(--mn-warning);
   }
 
   &.state-diverged {
-    color: $signal;
-
-    @include when-dark {
-      color: $signal-light;
-    }
+    color: var(--mn-danger);
   }
 
   &.state-uncloned {
-    color: $harbour;
-
-    @include when-dark {
-      color: $harbour-light;
-    }
+    color: var(--mn-primary);
   }
 }
 
-// Feature summary on the landing page.
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
@@ -175,82 +202,321 @@ $link-decoration: none !default;
 
 .card-item {
   padding: 1.25rem 1.35rem;
-  border: 1px solid rgb(42 74 92 / 0.15);
-  border-radius: $border-radius-lg;
-  background: rgb(255 255 255 / 0.6);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid var(--mn-hairline);
+  border-radius: var(--mn-radius-lg);
+  background: var(--mn-surface);
+  transition: border-color 150ms var(--mn-ease), box-shadow 150ms var(--mn-ease);
 
   h3 {
     font-size: 1.05rem;
     margin: 0 0 0.5rem;
-    color: $harbour;
+    color: var(--mn-primary);
   }
 
   p {
     margin: 0;
     font-size: 0.94rem;
-    color: $rope;
+    color: var(--mn-muted);
   }
 
   &:hover {
-    border-color: rgb(14 110 125 / 0.45);
-    box-shadow: $box-shadow-sm;
-  }
-
-  @include when-dark {
-    border-color: rgb(143 169 184 / 0.2);
-    background: rgb(19 36 48 / 0.55);
-
-    h3 {
-      color: $harbour-light;
-    }
-
-    p {
-      color: $rope-light;
-    }
-
-    &:hover {
-      border-color: rgb(79 179 196 / 0.5);
-    }
+    border-color: var(--mn-primary);
+    box-shadow: var(--mn-shadow-soft);
   }
 }
 
-// Navigation and chrome.
-.navbar {
-  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+// --- Navbar and its right-hand controls. ----------------------------------
 
-  .navbar-brand {
-    font-family: $headings-font-family;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  }
-}
-
-.navbar-title {
+.navbar-title,
+.navbar-brand {
   font-family: $headings-font-family;
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-// Code blocks read as terminal output, which is most of what this tool
-// produces, without pretending to be an interactive terminal.
-div.sourceCode {
-  border-radius: $border-radius;
-  border: 1px solid rgb(42 74 92 / 0.14);
+// Give the collapse room so `space-between` cannot open a gap before the
+// tools, then use one spacing everywhere in the group.
+.navbar .navbar-collapse {
+  flex-grow: 1;
+}
 
-  @include when-dark {
-    border-color: rgb(143 169 184 / 0.16);
+.navbar .quarto-navbar-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0.4rem;
+}
+
+.navbar .navbar-nav.ms-auto > .nav-item > .nav-link,
+.gh-widget-trigger,
+.navbar #quarto-search .aa-DetachedSearchButton,
+.navbar .quarto-navbar-tools .quarto-color-scheme-toggle {
+  @include pill-button;
+}
+
+.navbar .navbar-nav.ms-auto > .nav-item > .nav-link,
+.gh-widget-trigger {
+  padding: 0.3rem 0.6rem;
+}
+
+.navbar #quarto-search .aa-DetachedSearchButton,
+.navbar .quarto-navbar-tools .quarto-color-scheme-toggle {
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  box-shadow: none;
+}
+
+.navbar .navbar-nav.ms-auto > .nav-item > .nav-link:hover,
+.navbar .navbar-nav.ms-auto > .nav-item.show > .nav-link,
+.gh-widget-trigger:hover,
+.gh-widget-open .gh-widget-trigger,
+.navbar #quarto-search .aa-DetachedSearchButton:hover,
+.navbar #quarto-search .aa-DetachedSearchButton:focus-visible,
+.navbar .quarto-navbar-tools .quarto-color-scheme-toggle:hover,
+.navbar .quarto-navbar-tools .quarto-color-scheme-toggle:focus-visible {
+  @include pill-button-active;
+}
+
+// --- GitHub widget. -------------------------------------------------------
+// assets/scripts/github-widget.html replaces the `#github-widget` placeholder
+// with a button showing star and fork counts and a repository menu. Ported
+// from gribouille, which took it from posit-dev/great-docs.
+
+#github-widget {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.gh-icon {
+  flex-shrink: 0;
+}
+
+.gh-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gh-stat {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.gh-stat svg {
+  opacity: 0.85;
+}
+
+.gh-count {
+  min-width: 1rem;
+  text-align: center;
+}
+
+.gh-dropdown-arrow {
+  opacity: 0.7;
+  transition: transform 150ms var(--mn-ease);
+}
+
+.gh-widget-open .gh-dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.gh-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 12rem;
+  background: var(--mn-paper);
+  border: 1px solid var(--mn-hairline);
+  border-radius: var(--mn-radius-md);
+  box-shadow: var(--mn-shadow-soft);
+  padding: 0.35rem;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: opacity 150ms var(--mn-ease), transform 150ms var(--mn-ease),
+    visibility 150ms var(--mn-ease);
+  z-index: 1000;
+}
+
+.gh-widget-open .gh-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.gh-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.4rem 0.7rem;
+  color: var(--mn-ink);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: var(--mn-radius-sm);
+  transition: background 150ms var(--mn-ease), color 150ms var(--mn-ease);
+
+  &:hover,
+  &:focus-visible {
+    background: var(--mn-tint-primary);
+    color: var(--mn-primary);
+    text-decoration: none;
+  }
+
+  svg,
+  iconify-icon {
+    flex-shrink: 0;
   }
 }
 
-pre code {
-  font-size: 0.88rem;
+.gh-dropdown-divider {
+  height: 1px;
+  margin: 0.35rem 0;
+  background: var(--mn-hairline);
+}
+
+// --- Tabsets. -------------------------------------------------------------
+// Bootstrap bakes the active tab colour to near-black, which disappears on a
+// dark background. Override the variables rather than the rule, so the tab
+// keeps every other Bootstrap behaviour.
+
+.panel-tabset .nav-tabs {
+  border-bottom: 1px solid var(--mn-hairline);
+  --bs-nav-tabs-link-active-color: var(--mn-ink);
+  --bs-nav-tabs-link-active-bg: transparent;
+  --bs-nav-tabs-link-active-border-color: transparent;
+
+  .nav-link {
+    color: var(--mn-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--mn-radius-sm) var(--mn-radius-sm) 0 0;
+    font-family: $font-family-sans-serif;
+    transition: color 150ms var(--mn-ease), border-color 150ms var(--mn-ease);
+
+    &:hover,
+    &:focus-visible {
+      color: var(--mn-primary);
+      border-color: transparent;
+    }
+
+    &.active {
+      color: var(--mn-ink);
+      background: transparent;
+      border-color: transparent;
+      border-bottom: 2px solid var(--mn-primary);
+      font-weight: 600;
+    }
+  }
+}
+
+// --- Code. ----------------------------------------------------------------
+// Pandoc's highlighting themes hard-code a background on the .sourceCode
+// wrapper, and Bootstrap sets --bs-code-color on inline code, so the surface
+// needs !important to win. Token colours are left to Quarto's own
+// --quarto-hl-* variables, which is what makes the light and dark
+// highlighting themes work.
+
+div.sourceCode,
+pre.sourceCode,
+pre > code.sourceCode,
+pre.sourceCode > code,
+.cell-output,
+.cell-output pre {
+  background: var(--mn-surface) !important;
+  color: var(--mn-ink);
+  font-family: $font-family-monospace;
+  font-size: 0.88em;
   line-height: 1.55;
 }
 
-// Tables carry a lot of this site's meaning, so give them room and rules.
-.table > :not(caption) > * > * {
-  padding: 0.6rem 0.75rem;
+pre {
+  background: var(--mn-surface);
+  color: var(--mn-ink);
+  border: 1px solid var(--mn-hairline);
+  border-radius: var(--mn-radius-md);
+  font-family: $font-family-monospace;
+  font-size: 0.88em;
+  line-height: 1.55;
+  padding: 0.9rem 1rem;
 }
+
+// The wrapper carries the frame; the inner pre drops its own so there is no
+// double box.
+div.sourceCode {
+  border: 1px solid var(--mn-hairline);
+  border-radius: var(--mn-radius-md);
+  margin: 1rem 0;
+
+  > pre,
+  > pre.sourceCode {
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+  }
+}
+
+// Tokens bring their own colour; clear anything inherited behind them.
+pre code.sourceCode,
+pre code.sourceCode span {
+  background: transparent !important;
+}
+
+.cell-output,
+.cell-output pre {
+  border: 1px solid var(--mn-hairline);
+  border-radius: var(--mn-radius-md);
+  color: var(--mn-muted);
+}
+
+// The filename bar sits on top of the block.
+.code-with-filename .code-with-filename-file {
+  background: var(--mn-surface) !important;
+  color: var(--mn-muted);
+  border: 1px solid var(--mn-hairline);
+  border-bottom: 0;
+  border-radius: var(--mn-radius-md) var(--mn-radius-md) 0 0;
+  font-family: $font-family-monospace;
+  font-size: 0.82em;
+  padding: 0.4rem 0.9rem;
+
+  pre {
+    background: transparent !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+}
+
+.code-with-filename-file::after {
+  width: 0 !important;
+}
+
+.code-with-filename div.sourceCode {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-top: 0;
+}
+
+// Inline code only. Restricted to true inline contexts so tokens inside a
+// block are untouched, and !important because Pandoc tints table cells.
+:not(pre) > code {
+  --bs-code-color: var(--mn-primary);
+  background: var(--mn-surface) !important;
+  color: var(--mn-primary) !important;
+  border: 1px solid var(--mn-hairline);
+  border-radius: var(--mn-radius-sm);
+  padding: 0.1rem 0.35rem;
+  font-size: 0.88em;
+}
+
+// --- Tables. --------------------------------------------------------------
 
 table {
   font-size: 0.94rem;
@@ -258,19 +524,12 @@ table {
   thead th {
     font-family: $headings-font-family;
     font-weight: 600;
-    border-bottom: 2px solid rgb(42 74 92 / 0.2);
-
-    @include when-dark {
-      border-bottom-color: rgb(143 169 184 / 0.25);
-    }
+    border-bottom: 2px solid var(--mn-hairline);
   }
 }
 
-// The GitHub widget the navbar script injects.
-.github-widget-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
+.table > :not(caption) > * > * {
+  padding: 0.6rem 0.75rem;
 }
 
 .footer {
