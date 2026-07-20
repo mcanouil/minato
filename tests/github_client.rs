@@ -525,3 +525,70 @@ async fn reports_a_fork_whose_parent_was_deleted_as_a_fork_without_an_upstream()
         "but there is no parent left to compare against"
     );
 }
+
+#[tokio::test]
+async fn retries_a_server_error_rather_than_calling_it_unreadable() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(502).set_body_string("<html>Bad Gateway</html>"))
+        .up_to_n_times(1)
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(page(&[repository("one")], None)))
+        .mount(&server)
+        .await;
+
+    let repositories = client_for(&server)
+        .repositories(&Account::new("mcanouil"))
+        .await
+        .expect("the retry to succeed");
+
+    assert_eq!(repositories.len(), 1);
+}
+
+#[tokio::test]
+async fn a_persistent_server_error_is_reported_as_throttling_not_as_bad_json() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(503))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server)
+        .repositories(&Account::new("mcanouil"))
+        .await
+        .expect_err("exhausted retries");
+
+    assert!(
+        !matches!(error, GitHubError::Malformed { .. }),
+        "a server error must not be reported as an unreadable body, got: {error}"
+    );
+}
+
+#[tokio::test]
+async fn an_unexpected_status_names_the_status_rather_than_the_body() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(418).set_body_string("not json"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server)
+        .repositories(&Account::new("mcanouil"))
+        .await
+        .expect_err("an unexpected status");
+
+    assert!(matches!(error, GitHubError::Unexpected { status: 418, .. }));
+    assert!(
+        error.to_string().contains("418"),
+        "the error should name the status, got: {error}"
+    );
+}

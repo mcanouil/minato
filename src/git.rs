@@ -75,6 +75,64 @@ fn describe<S: AsRef<OsStr>>(arguments: &[S]) -> String {
         .join(" ")
 }
 
+/// Fetches from `origin`, updating remote-tracking refs only.
+///
+/// This never touches the working tree or any local branch, so it is always
+/// safe to run, including on a repository with uncommitted changes.
+///
+/// # Errors
+///
+/// Returns an error when `git` cannot be run or the fetch fails.
+pub fn fetch(directory: &Path) -> Result<(), GitError> {
+    run(directory, &["fetch", "--quiet", "--prune", "origin"]).map(|_| ())
+}
+
+/// Fast-forwards the checked-out branch to its upstream, and nothing else.
+///
+/// `--ff-only` is what makes this safe: git refuses rather than creating a
+/// merge commit, rewriting history, or discarding a change. If the caller has
+/// misjudged the situation, git declines instead of improvising.
+///
+/// # Errors
+///
+/// Returns an error when the branch cannot be fast-forwarded, which includes
+/// the case where doing so would overwrite an untracked file.
+pub fn fast_forward(directory: &Path) -> Result<(), GitError> {
+    run(directory, &["merge", "--ff-only", "@{upstream}"]).map(|_| ())
+}
+
+/// Clones `url` into `destination`.
+///
+/// The parent directory is created first, since a layout puts clones several
+/// levels below a root.
+///
+/// # Errors
+///
+/// Returns an error when the parent cannot be created, or the clone fails.
+pub fn clone(url: &str, destination: &Path, shallow: bool) -> Result<(), GitError> {
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| GitError::Unavailable {
+            message: format!("cannot create {}: {error}", parent.display()),
+        })?;
+    }
+
+    let mut arguments = vec!["clone".to_owned(), "--quiet".to_owned()];
+
+    if shallow {
+        arguments.push("--depth".to_owned());
+        arguments.push("1".to_owned());
+    }
+
+    arguments.push(url.to_owned());
+    arguments.push(destination.display().to_string());
+
+    // `git -C` needs an existing directory, and the destination does not exist
+    // yet, so the clone runs from the parent.
+    let working = destination.parent().unwrap_or(destination);
+
+    run(working, &arguments).map(|_| ())
+}
+
 /// Whether `path` is the root of a git working tree.
 ///
 /// A worktree or a submodule holds a `.git` file rather than a directory, so

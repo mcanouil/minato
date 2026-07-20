@@ -13,6 +13,7 @@ use jiff::Timestamp;
 use serde::Serialize;
 use std::fmt::Write as _;
 
+use crate::actions::{self, Mode};
 use crate::cache::{Cache, DEFAULT_TTL};
 use crate::compare::{self, Comparison, State, TrackedOwners};
 use crate::config::{self, Config};
@@ -47,6 +48,31 @@ pub enum Command {
 
     /// Show how local clones stand against what the provider reports.
     Status,
+
+    /// Clone repositories that have no local copy.
+    Clone {
+        /// Report what would be cloned, and change nothing.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Clone with a truncated history.
+        #[arg(long)]
+        shallow: bool,
+    },
+
+    /// Fetch every local clone. This never touches a working tree.
+    Fetch {
+        /// Report what would be fetched, and change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Fast-forward clones that are strictly behind and clean.
+    Update {
+        /// Report what would be updated, and change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 
     /// Discard cached data so the next run asks the provider again.
     Refresh,
@@ -91,9 +117,37 @@ pub enum CliError {
     #[error(transparent)]
     Cache(#[from] crate::cache::CacheError),
 
+    /// Configuration described nothing usable.
+    #[error(transparent)]
+    Validation(#[from] config::ValidationError),
+
     /// Output could not be rendered.
     #[error("cannot render JSON output: {0}")]
     Json(#[from] serde_json::Error),
+}
+
+/// What a command produced, and whether any repository failed.
+///
+/// The two are separate because a batch that reports several failures still
+/// produces output worth printing; the failures decide the exit code, not
+/// whether anything is shown.
+#[derive(Debug)]
+pub struct Output {
+    /// What to print.
+    pub text: String,
+
+    /// Whether any repository failed, which must make the process exit
+    /// non-zero even though the command itself ran.
+    pub failed: bool,
+}
+
+impl From<String> for Output {
+    fn from(text: String) -> Self {
+        Self {
+            text,
+            failed: false,
+        }
+    }
 }
 
 /// Runs a command, returning what to print.
@@ -102,16 +156,104 @@ pub enum CliError {
 ///
 /// Returns an error when configuration, authentication, the provider, or the
 /// cache prevents an answer. Every variant names what to do next.
-pub async fn run(cli: &Cli) -> Result<String, CliError> {
+pub async fn run(cli: &Cli) -> Result<Output, CliError> {
     match &cli.command {
         Command::Auth {
             command: AuthCommand::Status,
-        } => Ok(auth_status(cli.json)),
-        Command::Doctor => doctor(cli.json),
-        Command::Refresh => refresh(cli.json),
-        Command::List => list(cli).await,
-        Command::Status => status(cli).await,
+        } => Ok(auth_status(cli.json).into()),
+        Command::Doctor => doctor(cli.json).map(Into::into),
+        Command::Refresh => refresh(cli.json).map(Into::into),
+        Command::List => list(cli).await.map(Into::into),
+        Command::Status => status(cli).await.map(Into::into),
+        Command::Clone { dry_run, shallow } => {
+            act(cli, Act::Clone { shallow: *shallow }, mode(*dry_run)).await
+        }
+        Command::Fetch { dry_run } => act(cli, Act::Fetch, mode(*dry_run)).await,
+        Command::Update { dry_run } => act(cli, Act::Update, mode(*dry_run)).await,
     }
+}
+
+/// Which action to carry out.
+enum Act {
+    Clone { shallow: bool },
+    Fetch,
+    Update,
+}
+
+const fn mode(dry_run: bool) -> Mode {
+    if dry_run { Mode::DryRun } else { Mode::Execute }
+}
+
+/// Runs an action over everything the comparison found.
+///
+/// Failures do not stop the batch: every repository is reported, and the
+/// process exits non-zero only at the end.
+async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
+    let paths = paths()?;
+    let config = Config::load_from(&paths.config)?;
+    let gathered = gather(cli, &paths, &config).await?;
+
+    let roots = config.resolved_roots(paths.home.as_deref())?;
+    let scanned = scan::scan(&roots, scan::DEFAULT_MAX_DEPTH);
+    let comparisons = compare::compare(&gathered.remotes, &scanned.repositories, &gathered.tracked);
+
+    let summary = match action {
+        Act::Clone { shallow } => {
+            let root = roots.first().ok_or(config::ValidationError::NoRoots)?;
+
+            actions::clone_missing(&comparisons, root, &config.local, shallow, mode)
+        }
+        Act::Fetch => actions::fetch_all(&comparisons, mode),
+        Act::Update => actions::update_all(&comparisons, mode),
+    };
+
+    let failed = summary.has_failures();
+
+    let text = if cli.json {
+        serde_json::to_string_pretty(&summary)?
+    } else {
+        render_summary(&summary)
+    };
+
+    Ok(Output { text, failed })
+}
+
+/// Renders what happened, including everything deliberately left alone.
+fn render_summary(summary: &actions::Summary) -> String {
+    if summary.reports.is_empty() {
+        return "Nothing to do.".to_owned();
+    }
+
+    let mut table = Table::new(["", "REPOSITORY", "DETAIL"]);
+
+    for report in &summary.reports {
+        let (marker, detail) = match &report.outcome {
+            actions::Outcome::Done { detail } => ("ok", detail.clone()),
+            actions::Outcome::Would { detail } => ("--", format!("would {detail}")),
+            actions::Outcome::Skipped { reason } => ("  ", format!("skipped: {reason}")),
+            actions::Outcome::Failed { error } => ("!!", format!("failed: {error}")),
+        };
+
+        table.push([
+            marker.to_owned(),
+            report
+                .id
+                .as_ref()
+                .map_or_else(|| "-".to_owned(), ToString::to_string),
+            detail,
+        ]);
+    }
+
+    let counts = summary.counts();
+    let mut out = table.to_string();
+
+    let _ = write!(
+        out,
+        "\n{} done, {} would, {} skipped, {} failed.\n",
+        counts.done, counts.would, counts.skipped, counts.failed
+    );
+
+    out
 }
 
 /// Where configuration and the cache live for this run.
@@ -546,6 +688,39 @@ mod tests {
             describe_state(&State::LocalOnly(LocalOnlyReason::MissingRemotely)),
             "local only, gone from GitHub"
         );
+    }
+
+    #[test]
+    fn a_batch_failure_is_carried_out_to_the_exit_code() {
+        let summary = actions::Summary {
+            reports: vec![actions::Report {
+                id: None,
+                path: None,
+                outcome: actions::Outcome::Failed {
+                    error: "it went wrong".to_owned(),
+                },
+            }],
+        };
+
+        assert!(
+            summary.has_failures(),
+            "a failed repository must be able to reach the exit code"
+        );
+
+        let output = Output {
+            text: render_summary(&summary),
+            failed: summary.has_failures(),
+        };
+
+        assert!(output.failed);
+        assert!(output.text.contains("1 failed"));
+    }
+
+    #[test]
+    fn a_command_that_is_not_a_batch_never_reports_a_batch_failure() {
+        let output: Output = "some text".to_owned().into();
+
+        assert!(!output.failed);
     }
 
     #[test]
