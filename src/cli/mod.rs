@@ -779,6 +779,16 @@ fn describe_notes(comparison: &Comparison) -> String {
         }
     }
 
+    let mut notes: Vec<String> = notes.into_iter().map(ToOwned::to_owned).collect();
+
+    // How a fork stands against its parent is the reason to care that it is a
+    // fork at all, so it is spelled out rather than left as a flag.
+    if let Some(upstream) = comparison.upstream
+        && upstream.is_behind()
+    {
+        notes.push(format!("{} behind upstream", upstream.behind));
+    }
+
     notes.join(", ")
 }
 

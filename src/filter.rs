@@ -132,6 +132,7 @@ mod tests {
             path: Some(PathBuf::from("/code/repo")),
             group: group.map(ToOwned::to_owned),
             state,
+            upstream: None,
             local: None,
             remote: None,
         }

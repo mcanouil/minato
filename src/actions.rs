@@ -284,6 +284,7 @@ mod tests {
             path: path.map(PathBuf::from),
             group: None,
             state,
+            upstream: None,
             local: path.map(|_| LocalFlags::default()),
             remote: None,
         }

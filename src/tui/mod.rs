@@ -330,6 +330,7 @@ mod rendering {
                 path: Some(PathBuf::from("/code/perso/minato")),
                 group: Some("perso".to_owned()),
                 state: State::Behind { behind: 3 },
+                upstream: None,
                 local: Some(LocalFlags {
                     dirty: true,
                     ..LocalFlags::default()
@@ -341,6 +342,7 @@ mod rendering {
                 path: None,
                 group: None,
                 state: State::RemoteOnly,
+                upstream: None,
                 local: None,
                 remote: None,
             },

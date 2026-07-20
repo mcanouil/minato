@@ -4,6 +4,8 @@
 //! metadata field together. Asking for all of it at once keeps the number of
 //! requests low, which is also what keeps the rate limit comfortable.
 
+use std::fmt::Write as _;
+
 use jiff::Timestamp;
 use serde::Deserialize;
 
@@ -33,7 +35,7 @@ query($login: String!, $after: String, $pageSize: Int!, $assetPageSize: Int!) {
         isArchived
         isFork
         defaultBranchRef { name }
-        parent { name owner { login } }
+        parent { name owner { login } defaultBranchRef { name } }
         stargazerCount
         forkCount
         issues(states: OPEN) { totalCount }
@@ -172,6 +174,7 @@ struct Ref {
 struct Parent {
     name: String,
     owner: Owner,
+    default_branch_ref: Option<Ref>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -218,6 +221,75 @@ struct AssetNode {
     download_count: u64,
 }
 
+/// A fork and the parent ref it should be compared against.
+///
+/// Both are needed to ask GitHub for a comparison, and the parent's default
+/// branch is only known once the first query has answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForkComparison {
+    /// The fork.
+    pub id: RepoId,
+    /// The parent, written as GitHub wants it: `owner:branch`.
+    pub head_ref: String,
+}
+
+impl RepositoryNode {
+    /// What would be needed to compare this fork against its parent, when it
+    /// is a fork whose parent is still visible and has a default branch.
+    pub fn fork_comparison(&self) -> Option<ForkComparison> {
+        let parent = self.parent.as_ref()?;
+        let branch = parent.default_branch_ref.as_ref()?;
+
+        Some(ForkComparison {
+            id: RepoId::new(Provider::GitHub, &self.owner.login, &self.name),
+            head_ref: format!("{}:{}", parent.owner.login, branch.name),
+        })
+    }
+}
+
+/// The query comparing forks against their parents, built with one alias per
+/// fork so that a page of them costs one request.
+#[must_use]
+pub fn comparison_query(forks: &[ForkComparison]) -> String {
+    let mut query = String::from("query {\n");
+
+    for (index, fork) in forks.iter().enumerate() {
+        let _ = writeln!(
+            query,
+            "  f{index}: repository(owner: \"{}\", name: \"{}\") {{ defaultBranchRef {{ compare(headRef: \"{}\") {{ aheadBy behindBy }} }} }}",
+            fork.id.owner, fork.id.name, fork.head_ref
+        );
+    }
+
+    query.push_str("}\n");
+
+    query
+}
+
+/// One comparison result, keyed by the alias it was requested under.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComparisonNode {
+    pub default_branch_ref: Option<CompareRef>,
+}
+
+/// The comparison itself, absent when GitHub could not resolve the ref.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompareRef {
+    pub compare: Option<Compared>,
+}
+
+/// How a fork stands against its parent.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Compared {
+    /// Commits the fork has that the parent does not.
+    pub ahead_by: u32,
+    /// Commits the parent has that the fork does not.
+    pub behind_by: u32,
+}
+
 impl From<RepositoryNode> for RemoteRepo {
     fn from(node: RepositoryNode) -> Self {
         let latest_release = node
@@ -254,6 +326,7 @@ impl From<RepositoryNode> for RemoteRepo {
                 latest_release,
                 last_pushed: node.pushed_at,
                 language: node.primary_language.map(|language| language.name),
+                upstream: None,
                 licence: node.license_info.and_then(|license| license.spdx_id),
             },
         }
