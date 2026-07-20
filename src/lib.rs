@@ -4,6 +4,7 @@
 //! comparison, cache, and configuration logic stays reachable from integration
 //! tests in `tests/` rather than only through the process boundary.
 
+pub mod compare;
 pub mod config;
 pub mod git;
 pub mod github;

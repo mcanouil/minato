@@ -48,19 +48,31 @@ Primary states:
 | State | Meaning |
 | --- | --- |
 | `RemoteOnly` | Known to the provider, with no local clone under any configured root. |
-| `LocalOnly` | A local clone whose remote does not resolve to a known remote repository. |
+| `LocalOnly` | A local clone that no reported repository corresponds to. |
 | `InSync` | The default branch matches its remote-tracking ref. |
 | `Ahead` | Local commits not present on the remote. |
 | `Behind` | Remote commits not present locally, with no local divergence. |
 | `Diverged` | Both sides carry commits the other lacks. |
 
-Flags are orthogonal to the primary state, because a repository can be behind *and* dirty, and both facts matter:
+A seventh state, `Incomparable`, covers a clone that matches a reported repository but cannot be compared against it: it has no commits, a commit rather than a branch is checked out, or the checked-out branch follows nothing.
+Reporting why is more useful than forcing such a repository into a state it does not occupy.
 
-- `dirty`, when the working tree has uncommitted changes.
-- `detached_head`, when no branch is checked out.
-- `fork_behind_upstream`, when the fork's default branch trails its parent.
+Flags are orthogonal to the primary state, because a repository can be behind *and* dirty, and both facts matter.
+They are split by where they come from, and are absent rather than false when that side has nothing to say, so that "not a fork" stays distinguishable from "there is nothing to ask":
 
-`LocalOnly` is subdivided by cause, since the remedies differ: the remote was deleted, the remote was renamed or moved, or the owner is simply not in the tracked configuration.
+- From the clone: `dirty` when tracked files hold uncommitted changes, `untracked` when the working tree holds files git is not tracking, and `detached_head` when no branch is checked out.
+- From the provider: `archived`, `private`, and `fork`.
+
+`dirty` and `untracked` are deliberately separate.
+An untracked file is usually a build artefact, and git fast-forwards happily alongside one, refusing by itself in the single case where the incoming commit would overwrite it.
+Treating the two alike would mark a repository unupdatable for as long as a stray log file sat in it.
+
+`LocalOnly` is subdivided by cause, since the remedies differ: the clone has no remote at all, its remote points at a host `minato` does not support, its owner is not configured so the provider was never asked, or the owner is configured and the provider did not report it.
+That last case covers deletion, renaming, and a repository turning private.
+These are not told apart, because nothing gathered so far can distinguish them: doing so needs the provider's stable repository identifier, which is not yet fetched.
+
+`fork_behind_upstream` is not implemented.
+Knowing whether a fork trails its parent means comparing the two default branches, and the parent's branch tip is not among the data currently fetched.
 
 ## Sync safety
 
