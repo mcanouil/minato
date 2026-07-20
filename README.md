@@ -65,6 +65,23 @@ Commands can be narrowed with `--owner`, `--group`, and `--state`, each repeatab
 | `minato refresh` | Discards cached data so the next run asks the provider again. |
 | `minato auth status` | Whether a token was found and where it came from, never the token itself. |
 | `minato doctor` | Checks git, the token, configuration, roots, and the cache, reporting all of them rather than stopping at the first problem. |
+| `minato tui` | Browses the same comparison interactively. |
+
+### Interactive browser
+
+`minato tui` opens a keyboard-driven table over exactly the comparison the commands produce.
+
+| Key | Does |
+| --- | --- |
+| `j` `k`, arrows | Move. `g` and `G` jump to the ends. |
+| `/` | Search by repository, group, or path. `Enter` keeps it, `Esc` clears it. |
+| `s` | Cycle the ordering: name, state, group. Sorting by state puts what needs attention first. |
+| `f` `u` | Fetch or update the highlighted repository. |
+| `r` | Rescan the disk. It does not refetch, since a keystroke should not spend your rate limit; use `--refresh` for that. |
+| `q` | Leave. |
+
+Every action it offers calls the same function the matching command calls, so nothing can be done here that cannot be scripted.
+It needs a terminal, and says so plainly when there is not one rather than failing obscurely.
 
 `clone`, `fetch`, and `update` all take `--dry-run`, which reports what would happen and changes nothing.
 One repository failing does not stop the others; every repository is reported and the process exits non-zero if any of them failed.
@@ -88,7 +105,7 @@ Deployment to GitHub Pages is deferred until the repository is public, since Pag
 
 ## Requirements
 
-- Rust 1.85 or later (edition 2024).
+- Rust 1.88 or later (edition 2024).
 - A `git` binary on `PATH`, which `minato` shells out to so that your existing SSH agent and credential helpers work unchanged.
 
 ## Development

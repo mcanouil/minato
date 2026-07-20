@@ -2,7 +2,7 @@
 name = "minato"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "Overview and sync of Git repositories across hosting providers"
 repository = "https://github.com/mcanouil/minato"
 license = "MIT"
@@ -13,6 +13,7 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 clap = { version = "4.6.2", features = ["derive"] }
 jiff = { version = "0.2.33", features = ["serde"] }
+ratatui = "0.30.2"
 rayon = "1.12.0"
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json", "http2", "system-proxy"] }
 serde = { version = "1.0.229", features = ["derive"] }
