@@ -14,9 +14,15 @@ Every command accepts these.
 | `--owner <OWNER>` | Keep only repositories owned by these accounts. Repeatable. |
 | `--group <GROUP>` | Keep only repositories in these groups, which are the directories beneath a root. Repeatable. |
 | `--state <STATE>` | Keep only repositories in these states. Repeatable. |
+| `--include-forks` | Include forks, which are hidden by default. |
+| `--include-external` | Include clones of repositories owned by nobody you track, which are hidden by default. |
 
 Filters combine rather than accumulate: naming an owner and a state requires both.
 All of them are matched without regard to case.
+
+Forks and external clones are left out by default, so the usual view is the repositories you maintain.
+A fork is any repository the provider reports as one; an external clone is one whose remote owner is not a configured account.
+Add `--include-forks` or `--include-external` to bring either back.
 
 ### States
 
