@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - feat: report how far a fork trails the repository it was forked from (#13).
 - feat: configure how long provider responses stay cached with `cache.ttl`, defaulting to fifteen minutes (#27).
 - feat: hide forks and clones of untracked owners by default, with `--include-forks` and `--include-external` to show them (#30).
+- feat: install with one line, `curl -fsSL https://m.canouil.dev/minato/install.sh | bash`; releases now ship a `SHA256SUMS` asset and build provenance the installer and `gh attestation verify` can check (#51).
 - feat: frame local clones as a backup of remote state in the docs and output, so a repository with no clone reads as "not backed up" rather than a bare "not cloned" (#34).
 - feat: sync forks with their upstream through GitHub's merge-upstream with `minato sync-fork`, fast-forward only and with `--dry-run`, leaving a diverged fork reported rather than merged (#36).
 - feat: generate the command reference from the command-line definitions, gated in CI so the documented commands and flags cannot drift from the binary (#37).
