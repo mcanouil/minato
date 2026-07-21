@@ -146,8 +146,10 @@ impl Cache {
         let path = self.path_for(key);
 
         // Write beside the target and rename, so that an interrupted write
-        // leaves the previous entry intact rather than a truncated one.
-        let temporary = path.with_extension("json.tmp");
+        // leaves the previous entry intact rather than a truncated one. The
+        // temporary name carries the process id, so two `minato` runs writing
+        // the same key do not share one temporary and publish a torn file.
+        let temporary = self.temp_path_for(key);
 
         fs::write(&temporary, text).map_err(|source| CacheError::Write {
             path: temporary.clone(),
@@ -175,6 +177,13 @@ impl Cache {
 
     fn path_for(&self, key: &str) -> PathBuf {
         self.root.join(format!("{}.json", sanitise(key)))
+    }
+
+    /// The scratch path a write renames from, unique to this process so
+    /// concurrent runs do not share one temporary.
+    fn temp_path_for(&self, key: &str) -> PathBuf {
+        self.root
+            .join(format!("{}.json.{}.tmp", sanitise(key), std::process::id()))
     }
 }
 
@@ -208,6 +217,26 @@ mod tests {
         let cache = Cache::new(directory.path().join("minato"));
 
         (directory, cache)
+    }
+
+    #[test]
+    fn the_temporary_write_path_is_unique_to_the_process() {
+        let (_directory, cache) = cache();
+
+        let temporary = cache.temp_path_for("github-mcanouil");
+
+        assert_ne!(
+            temporary,
+            cache.path_for("github-mcanouil"),
+            "the scratch path must differ from the published one"
+        );
+        assert!(
+            temporary
+                .to_string_lossy()
+                .contains(&std::process::id().to_string()),
+            "the scratch path must carry the process id, got: {}",
+            temporary.display()
+        );
     }
 
     #[test]
