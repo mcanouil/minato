@@ -67,12 +67,6 @@ impl StateFilter {
 }
 
 impl Filter {
-    /// Whether anything was asked for.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.owners.is_empty() && self.groups.is_empty() && self.states.is_empty()
-    }
-
     /// Whether a comparison survives every condition.
     ///
     /// Beyond the named owner, group, and state conditions, forks and clones of
