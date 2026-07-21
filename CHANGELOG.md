@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - fix: reject `.` or `..` as a repository owner or name, so a crafted identity from cache or configuration cannot build a directory-escaping path (#41).
 - fix: report unreadable roots and skipped paths from `clone`, `fetch`, and `update` too, not only `status`, so a mistyped root is never silent (#42).
 - fix: list each account once when a login appears under both `users` and `orgs` or in a different case, so repositories are no longer fetched, reported, and cloned twice (#44).
+- fix: apply `--owner` on `list` and `sync-fork`, which previously ignored it (#50).
 - fix: report a persistent server error or an unreachable host as such when listing gives up, instead of always calling it a rate limit (#49).
 - fix: report a clone the scan cannot read as a failure rather than dropping it, so its remote is no longer mislabelled "not backed up" (#48).
 - fix: give each process its own cache temporary file, so concurrent runs writing the same key cannot publish a torn entry (#47).
