@@ -18,3 +18,4 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - fix: retry a transient stream or connection reset while listing, so one cancelled response no longer fails a run enumerating several accounts (#31).
+- fix: report symlinked directories the scan does not follow, so a projects tree kept behind a symlink is explained rather than showing an empty result (#32).

@@ -777,6 +777,14 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
         let _ = write!(out, "\n{failure}");
     }
 
+    for link in &scanned.skipped_symlinks {
+        let _ = write!(
+            out,
+            "\nNot following the symlink {}; move the clones out from behind it, or point a root at its target.",
+            link.display()
+        );
+    }
+
     Ok(out)
 }
 

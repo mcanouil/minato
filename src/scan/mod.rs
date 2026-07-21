@@ -242,6 +242,13 @@ pub struct Scan {
 
     /// Roots that could not be read.
     pub failures: Vec<ScanError>,
+
+    /// Symlinked directories that were not followed, in a stable order.
+    ///
+    /// The walk does not follow symlinks, so a link cannot send it round in
+    /// circles. Reporting the links it skipped means a projects tree kept
+    /// behind one is explained rather than silently missing.
+    pub skipped_symlinks: Vec<PathBuf>,
 }
 
 /// Finds every clone under `roots` and reads its state.
@@ -252,11 +259,12 @@ pub struct Scan {
 pub fn scan(roots: &ResolvedRoots, max_depth: usize) -> Scan {
     let mut directories: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut failures = Vec::new();
+    let mut skipped_symlinks = Vec::new();
 
     for root in roots.iter() {
         let mut found = Vec::new();
 
-        if let Err(failure) = collect(root, max_depth, &mut found) {
+        if let Err(failure) = collect(root, max_depth, &mut found, &mut skipped_symlinks) {
             failures.push(failure);
         }
 
@@ -265,6 +273,9 @@ pub fn scan(roots: &ResolvedRoots, max_depth: usize) -> Scan {
 
     directories.sort();
     directories.dedup_by(|left, right| left.0 == right.0);
+
+    skipped_symlinks.sort();
+    skipped_symlinks.dedup();
 
     let mut repositories: Vec<_> = directories
         .par_iter()
@@ -276,6 +287,7 @@ pub fn scan(roots: &ResolvedRoots, max_depth: usize) -> Scan {
     Scan {
         repositories,
         failures,
+        skipped_symlinks,
     }
 }
 
@@ -284,6 +296,7 @@ fn collect(
     directory: &Path,
     remaining_depth: usize,
     found: &mut Vec<PathBuf>,
+    skipped_symlinks: &mut Vec<PathBuf>,
 ) -> Result<(), ScanError> {
     if git::is_repository(directory) {
         found.push(directory.to_owned());
@@ -307,10 +320,29 @@ fn collect(
 
         // `file_type` does not follow symlinks, so a link pointing back up the
         // tree cannot send the walk round in circles.
-        if entry.file_type().is_ok_and(|kind| kind.is_dir()) && !is_hidden(&path) {
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+
+        if is_hidden(&path) {
+            continue;
+        }
+
+        if kind.is_symlink() {
+            // The link is not followed, but a link to a directory is reported,
+            // so a projects tree kept behind one is explained rather than
+            // silently absent. `metadata` follows the link, so a broken one
+            // resolves to an error and is left out.
+            if path.metadata().is_ok_and(|meta| meta.is_dir()) {
+                skipped_symlinks.push(path);
+            }
+            continue;
+        }
+
+        if kind.is_dir() {
             // A directory that cannot be read is skipped rather than failing
             // the whole scan; only an unreadable root is worth reporting.
-            let _ = collect(&path, remaining_depth - 1, found);
+            let _ = collect(&path, remaining_depth - 1, found, skipped_symlinks);
         }
     }
 
