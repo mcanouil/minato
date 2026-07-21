@@ -12,3 +12,4 @@ All notable changes to this project will be documented in this file.
 - feat: group repositories by the directory they sit in, with `--group` to select and `--into-group` to place new clones, and `minato move --to-group` to move an existing one (#10, #14).
 - feat: browse all of it interactively with `minato tui` (#11).
 - feat: report how far a fork trails the repository it was forked from (#13).
+- feat: configure how long provider responses stay cached with `cache.ttl`, defaulting to fifteen minutes (#27).

@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use jiff::SignedDuration;
 use serde::{Deserialize, Serialize};
 
 use crate::model::RepoId;
@@ -43,6 +44,10 @@ pub struct Config {
     /// User-defined groupings, keyed by tag name.
     #[serde(default)]
     pub tags: BTreeMap<String, Vec<RepoId>>,
+
+    /// How the cached copy of provider data is kept fresh.
+    #[serde(default)]
+    pub cache: CacheSettings,
 }
 
 /// Per-provider settings.
@@ -107,6 +112,28 @@ pub enum Protocol {
     Https,
 }
 
+/// How long the cached copy of provider data stays fresh.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CacheSettings {
+    /// How long cached data stays fresh before a run refetches it.
+    ///
+    /// Written as a friendly duration, for example `"15m"` or `"1h30m"`. A
+    /// zero duration refetches on every run.
+    #[serde(default = "default_ttl")]
+    pub ttl: SignedDuration,
+}
+
+impl Default for CacheSettings {
+    fn default() -> Self {
+        Self { ttl: default_ttl() }
+    }
+}
+
+fn default_ttl() -> SignedDuration {
+    crate::cache::DEFAULT_TTL
+}
+
 /// A configuration that parsed but does not describe usable settings.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ValidationError {
@@ -139,6 +166,13 @@ pub enum ValidationError {
     LayoutUnknownPlaceholder {
         /// The unrecognised placeholder, without its braces.
         placeholder: String,
+    },
+
+    /// The cache lifetime was written as a negative duration.
+    #[error("`cache.ttl` must not be negative; got {ttl}")]
+    NegativeCacheTtl {
+        /// The offending duration.
+        ttl: SignedDuration,
     },
 }
 
@@ -236,6 +270,12 @@ impl Config {
             return Err(ValidationError::NoRoots);
         }
 
+        if self.cache.ttl.is_negative() {
+            return Err(ValidationError::NegativeCacheTtl {
+                ttl: self.cache.ttl,
+            });
+        }
+
         validate_layout(&self.local.layout)
     }
 
@@ -285,7 +325,10 @@ impl Config {
              [local]\n\
              roots = [\"~/Projects\"]\n\
              layout = \"{DEFAULT_LAYOUT}\"\n\
-             protocol = \"ssh\"\n"
+             protocol = \"ssh\"\n\
+             \n\
+             [cache]\n\
+             ttl = \"15m\"\n"
         )
     }
 
@@ -459,6 +502,26 @@ reference = ["github:mcanouil/minato"]
         assert_eq!(config.local.protocol, Protocol::Ssh);
         assert!(config.tags.is_empty());
         assert!(config.providers.github.unwrap().orgs.is_empty());
+        assert_eq!(config.cache.ttl, crate::cache::DEFAULT_TTL);
+    }
+
+    #[test]
+    fn reads_a_configured_cache_lifetime() {
+        let config = config_with("[local]\nroots = [\"~/P\"]\n\n[cache]\nttl = \"2h\"\n");
+
+        assert_eq!(config.cache.ttl, SignedDuration::from_hours(2));
+    }
+
+    #[test]
+    fn rejects_a_negative_cache_lifetime() {
+        let config = config_with("[local]\nroots = [\"~/P\"]\n\n[cache]\nttl = \"-5m\"\n");
+
+        assert_eq!(
+            config.validate(),
+            Err(ValidationError::NegativeCacheTtl {
+                ttl: SignedDuration::from_mins(-5),
+            })
+        );
     }
 
     #[test]
