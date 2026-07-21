@@ -116,15 +116,18 @@ pub fn clone(url: &str, destination: &Path, shallow: bool) -> Result<(), GitErro
         })?;
     }
 
-    let mut arguments = vec!["clone".to_owned(), "--quiet".to_owned()];
+    // The arguments are `OsString`, so the destination passes through as its
+    // real bytes rather than a lossy display string that would mangle a
+    // non-UTF-8 path.
+    let mut arguments: Vec<std::ffi::OsString> = vec!["clone".into(), "--quiet".into()];
 
     if shallow {
-        arguments.push("--depth".to_owned());
-        arguments.push("1".to_owned());
+        arguments.push("--depth".into());
+        arguments.push("1".into());
     }
 
-    arguments.push(url.to_owned());
-    arguments.push(destination.display().to_string());
+    arguments.push(url.into());
+    arguments.push(destination.as_os_str().to_owned());
 
     // `git -C` needs an existing directory, and the destination does not exist
     // yet, so the clone runs from the parent.
