@@ -87,6 +87,21 @@ impl RetryPolicy {
 /// better reported than slept through, so the user can decide.
 const MAX_RETRY_AFTER: Duration = Duration::from_secs(300);
 
+/// Why a request was retried, so that exhausting the retries reports the real
+/// cause rather than assuming a rate limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ThrottleKind {
+    /// A primary or secondary rate limit.
+    RateLimit,
+    /// GitHub returned a server error.
+    ServerError {
+        /// The status it returned.
+        status: u16,
+    },
+    /// The connection was reset after it was made.
+    Transport,
+}
+
 /// A throttling response, and what it implies about waiting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Throttle {
@@ -101,6 +116,9 @@ struct Throttle {
     /// A secondary limit clears in seconds, so it is worth retrying. A primary
     /// limit is an hourly quota, so retrying only wastes the user's time.
     transient: bool,
+
+    /// What caused the throttle, used to report the right error on exhaustion.
+    kind: ThrottleKind,
 }
 
 impl Throttle {
@@ -222,6 +240,15 @@ pub enum GitHubError {
         /// The underlying failure.
         #[source]
         source: reqwest::Error,
+    },
+
+    /// GitHub could not be reached after the retry budget was spent.
+    #[error(
+        "cannot reach GitHub while listing repositories for `{account}` after retrying; check your connection and try again"
+    )]
+    Unreachable {
+        /// The account being listed.
+        account: String,
     },
 
     /// A fork could not be synced with its upstream.
@@ -537,7 +564,7 @@ impl GitHubClient {
         account: &Account,
         after: Option<&str>,
     ) -> Result<schema::RepositoryConnection, GitHubError> {
-        let mut last_reset = None;
+        let mut last = None;
 
         for attempt in 0..self.retry.attempts {
             let throttle = match self.page_once(account, after).await {
@@ -546,7 +573,7 @@ impl GitHubClient {
                 Err(PageFailure::Throttled(throttle)) => throttle,
             };
 
-            last_reset = throttle.reset;
+            last = Some(throttle);
 
             let is_last_attempt = attempt + 1 == self.retry.attempts;
 
@@ -560,9 +587,21 @@ impl GitHubClient {
             tokio::time::sleep(delay).await;
         }
 
-        Err(GitHubError::RateLimited {
-            account: account.login().to_owned(),
-            reset: last_reset,
+        // The retries are spent, so report what actually kept failing rather
+        // than assuming a rate limit: a persistent server error or an
+        // unreachable host needs a different remedy.
+        let login = account.login().to_owned();
+
+        Err(match last.map(|throttle| throttle.kind) {
+            Some(ThrottleKind::ServerError { status }) => GitHubError::Unexpected {
+                account: login,
+                status,
+            },
+            Some(ThrottleKind::Transport) => GitHubError::Unreachable { account: login },
+            _ => GitHubError::RateLimited {
+                account: login,
+                reset: last.and_then(|throttle| throttle.reset),
+            },
         })
     }
 
@@ -609,6 +648,9 @@ impl GitHubClient {
                 retry_after: header_number(&headers, "retry-after").map(Duration::from_secs),
                 reset: None,
                 transient: true,
+                kind: ThrottleKind::ServerError {
+                    status: status.as_u16(),
+                },
             }));
         }
 
@@ -643,6 +685,7 @@ impl GitHubClient {
                 retry_after: None,
                 reset: rate_limit_reset(&headers),
                 transient: false,
+                kind: ThrottleKind::RateLimit,
             }));
         }
 
@@ -691,6 +734,7 @@ fn transport_failure(account: &str, source: reqwest::Error) -> PageFailure {
         retry_after: None,
         reset: None,
         transient: true,
+        kind: ThrottleKind::Transport,
     })
 }
 
@@ -720,6 +764,7 @@ fn throttle_from(
         retry_after,
         reset,
         transient,
+        kind: ThrottleKind::RateLimit,
     })
 }
 
@@ -821,6 +866,7 @@ mod tests {
             retry_after: Some(Duration::from_secs(3600)),
             reset: None,
             transient: true,
+            kind: ThrottleKind::RateLimit,
         };
 
         assert_eq!(
@@ -836,6 +882,7 @@ mod tests {
             retry_after: None,
             reset: None,
             transient: true,
+            kind: ThrottleKind::Transport,
         };
         let policy = RetryPolicy {
             attempts: 4,

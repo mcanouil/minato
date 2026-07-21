@@ -567,8 +567,8 @@ async fn a_persistent_server_error_is_reported_as_throttling_not_as_bad_json() {
         .expect_err("exhausted retries");
 
     assert!(
-        !matches!(error, GitHubError::Malformed { .. }),
-        "a server error must not be reported as an unreadable body, got: {error}"
+        matches!(error, GitHubError::Unexpected { status: 503, .. }),
+        "a spent server-error retry reports the server error, not an unreadable body or a rate limit, got: {error}"
     );
 }
 
@@ -759,11 +759,12 @@ async fn retries_a_connection_reset_mid_response() {
     .expect("an error rather than a hang")
     .expect_err("a dropped connection should fail once retries are spent");
 
-    // A reset after the connection was made is treated as transient throttling,
-    // so it is retried rather than surfaced at once as a transport error.
+    // A reset after the connection was made is retried, then, once the retries
+    // are spent, reported as an unreachable host rather than as a rate limit,
+    // which would send the user to the wrong remedy.
     assert!(
-        matches!(error, GitHubError::RateLimited { .. }),
-        "a reset should be retried as throttling, got: {error}"
+        matches!(error, GitHubError::Unreachable { .. }),
+        "a spent reset retry should report an unreachable host, got: {error}"
     );
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert_eq!(
