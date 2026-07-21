@@ -70,8 +70,7 @@ fn write_row(out: &mut String, cells: &[String], widths: &[usize]) {
     let last = widths.len().saturating_sub(1);
 
     for (column, width) in widths.iter().enumerate() {
-        let empty = String::new();
-        let cell = cells.get(column).unwrap_or(&empty);
+        let cell = cells.get(column).map_or("", String::as_str);
 
         // The final column is not padded, so lines carry no trailing spaces.
         if column == last {

@@ -356,15 +356,31 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
         Act::Update => actions::update_all(&comparisons, mode),
     };
 
+    summary_output(cli.json, &summary)
+}
+
+/// Renders a batch summary as JSON or a table, carrying the failure flag.
+fn summary_output(as_json: bool, summary: &actions::Summary) -> Result<Output, CliError> {
     let failed = summary.has_failures();
 
-    let text = if cli.json {
-        serde_json::to_string_pretty(&summary)?
+    let text = if as_json {
+        serde_json::to_string_pretty(summary)?
     } else {
-        render_summary(&summary)
+        render_summary(summary)
     };
 
     Ok(Output { text, failed })
+}
+
+/// Returns the client, building it on first use so a fully cached or rehearsed
+/// run never asks for a token.
+fn client_or_init(slot: &mut Option<GitHubClient>) -> Result<&GitHubClient, CliError> {
+    if slot.is_none() {
+        let (token, source) = auth::resolve_token_from_system()?;
+        *slot = Some(GitHubClient::new(token, Some(source))?);
+    }
+
+    Ok(slot.as_ref().expect("the client was just built"))
 }
 
 /// Renders what happened, including everything deliberately left alone.
@@ -474,12 +490,7 @@ async fn sync_fork(cli: &Cli, mode: Mode) -> Result<Output, CliError> {
             Mode::Execute => {
                 // The client is built once, and only when a fork actually needs
                 // syncing, so a rehearsal never asks for a token.
-                let client = if let Some(client) = &client {
-                    client
-                } else {
-                    let (token, source) = auth::resolve_token_from_system()?;
-                    client.insert(GitHubClient::new(token, Some(source))?)
-                };
+                let client = client_or_init(&mut client)?;
 
                 match client.merge_upstream(&repo.id, branch).await {
                     Ok(()) => actions::Outcome::Done { detail },
@@ -494,15 +505,8 @@ async fn sync_fork(cli: &Cli, mode: Mode) -> Result<Output, CliError> {
     }
 
     let summary = actions::Summary { reports };
-    let failed = summary.has_failures();
 
-    let text = if cli.json {
-        serde_json::to_string_pretty(&summary)?
-    } else {
-        render_summary(&summary)
-    };
-
-    Ok(Output { text, failed })
+    summary_output(cli.json, &summary)
 }
 
 /// Builds a report for a fork, which has no path since it is a remote action.
@@ -788,12 +792,7 @@ async fn gather(cli: &Cli, paths: &Paths, config: &Config) -> Result<Gathered, C
 
         // The client is built once, and only when something actually needs
         // fetching, so a fully cached run never asks for a token.
-        let client = if let Some(client) = &client {
-            client
-        } else {
-            let (token, source) = auth::resolve_token_from_system()?;
-            client.insert(GitHubClient::new(token, Some(source))?)
-        };
+        let client = client_or_init(&mut client)?;
 
         let fetched = client.repositories(account).await?;
         paths.cache.store(&key, &fetched, now)?;
@@ -970,30 +969,28 @@ fn describe_state(state: &State) -> String {
 
 /// The flags worth showing beside a state.
 fn describe_notes(comparison: &Comparison) -> String {
-    let mut notes = Vec::new();
+    let mut notes: Vec<String> = Vec::new();
 
     if let Some(local) = comparison.local {
         if local.dirty {
-            notes.push("dirty");
+            notes.push("dirty".to_owned());
         }
         if local.untracked {
-            notes.push("untracked files");
+            notes.push("untracked files".to_owned());
         }
     }
 
     if let Some(remote) = comparison.remote {
         if remote.archived {
-            notes.push("archived");
+            notes.push("archived".to_owned());
         }
         if remote.private {
-            notes.push("private");
+            notes.push("private".to_owned());
         }
         if remote.fork {
-            notes.push("fork");
+            notes.push("fork".to_owned());
         }
     }
-
-    let mut notes: Vec<String> = notes.into_iter().map(ToOwned::to_owned).collect();
 
     // How a fork stands against its parent is the reason to care that it is a
     // fork at all, so it is spelled out rather than left as a flag.

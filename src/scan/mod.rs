@@ -189,23 +189,17 @@ fn read_tracking(path: &Path, head: &Head) -> Option<Tracking> {
         return None;
     };
 
-    let upstream = git::run_optional(
-        path,
-        &[
-            "rev-parse",
-            "--abbrev-ref",
-            "--symbolic-full-name",
-            &format!("{branch}@{{upstream}}"),
-        ],
-    )?;
-
+    // `git` resolves `@{upstream}` itself and exits non-zero when the branch
+    // tracks nothing, so a single `rev-list` replaces a `rev-parse` to name the
+    // upstream ref followed by a `rev-list` against it, saving one process spawn
+    // per clone in the parallel scan.
     let counts = git::run_optional(
         path,
         &[
             "rev-list",
             "--left-right",
             "--count",
-            &format!("{branch}...{upstream}"),
+            &format!("{branch}...{branch}@{{upstream}}"),
         ],
     )?;
 

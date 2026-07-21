@@ -134,9 +134,7 @@ impl RepoId {
             name: name.to_lowercase(),
         }
     }
-}
 
-impl RepoId {
     /// The URL a clone of this repository is made from.
     #[must_use]
     pub fn clone_url(&self, protocol: CloneProtocol) -> String {

@@ -447,6 +447,16 @@ impl GitHubClient {
         forks: &[schema::ForkComparison],
         repositories: &mut [RemoteRepo],
     ) {
+        // One index of identity to position, so each fork's row is found in
+        // constant time rather than by scanning the whole listing per fork. The
+        // keys are owned so the map does not hold the listing borrowed while its
+        // rows are updated.
+        let position: std::collections::HashMap<RepoId, usize> = repositories
+            .iter()
+            .enumerate()
+            .map(|(index, repository)| (repository.id.clone(), index))
+            .collect();
+
         for batch in forks.chunks(COMPARISON_BATCH) {
             let Ok(compared) = self.compare_forks(account, batch).await else {
                 continue;
@@ -455,11 +465,8 @@ impl GitHubClient {
             for (fork, standing) in batch.iter().zip(compared) {
                 let Some(standing) = standing else { continue };
 
-                if let Some(repository) = repositories
-                    .iter_mut()
-                    .find(|repository| repository.id == fork.id)
-                {
-                    repository.metadata.upstream = Some(standing);
+                if let Some(&index) = position.get(&fork.id) {
+                    repositories[index].metadata.upstream = Some(standing);
                 }
             }
         }

@@ -68,7 +68,7 @@ pub struct Report {
 }
 
 /// Everything that happened, and whether any of it failed.
-#[derive(Debug, Default, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Summary {
     /// One entry per repository considered.
     pub reports: Vec<Report>,
@@ -244,9 +244,8 @@ pub fn fetch_all(comparisons: &[Comparison], mode: Mode) -> Summary {
 pub fn update_all(comparisons: &[Comparison], mode: Mode) -> Summary {
     let reports = comparisons
         .par_iter()
-        .filter(|comparison| comparison.path.is_some())
-        .map(|comparison| {
-            let path = comparison.path.clone().unwrap_or_default();
+        .filter_map(|comparison| {
+            let path = comparison.path.clone()?;
 
             let outcome = if comparison.can_fast_forward() {
                 let detail = format!("fast-forward {}", path.display());
@@ -260,11 +259,11 @@ pub fn update_all(comparisons: &[Comparison], mode: Mode) -> Summary {
                 }
             };
 
-            Report {
+            Some(Report {
                 id: comparison.id.clone(),
                 path: Some(path),
                 outcome,
-            }
+            })
         })
         .collect();
 
