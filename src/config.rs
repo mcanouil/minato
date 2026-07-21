@@ -298,12 +298,43 @@ impl Config {
     ///
     /// Returns an error naming the offending root when it starts with `~` and
     /// no home directory is known, rather than silently scanning a literal `~`.
-    pub fn resolved_roots(&self, home: Option<&Path>) -> Result<Vec<PathBuf>, UnresolvedRootError> {
+    pub fn resolved_roots(
+        &self,
+        home: Option<&Path>,
+    ) -> Result<ResolvedRoots, UnresolvedRootError> {
         self.local
             .roots
             .iter()
             .map(|root| expand_tilde(root, home))
-            .collect()
+            .collect::<Result<Vec<_>, _>>()
+            .map(ResolvedRoots::from_resolved)
+    }
+}
+
+/// Roots with every leading `~` expanded, the only form a scan may consume.
+///
+/// A scan reads these paths as written, so an unexpanded `~` would name a
+/// directory rather than the home directory. Building this type is where that
+/// expansion is asserted: [`Config::resolved_roots`] performs it, and
+/// [`ResolvedRoots::from_resolved`] wraps paths a caller has already resolved.
+/// [`scan`](crate::scan::scan) accepts nothing else, so handing it the verbatim
+/// [`Config`] roots cannot compile.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ResolvedRoots(Vec<PathBuf>);
+
+impl ResolvedRoots {
+    /// Wraps roots the caller has already expanded to concrete paths.
+    #[must_use]
+    pub fn from_resolved(roots: Vec<PathBuf>) -> Self {
+        Self(roots)
+    }
+}
+
+impl std::ops::Deref for ResolvedRoots {
+    type Target = [PathBuf];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -603,10 +634,10 @@ reference = ["github:mcanouil/minato"]
             config
                 .resolved_roots(Some(Path::new("/home/user")))
                 .unwrap(),
-            [
+            ResolvedRoots::from_resolved(vec![
                 PathBuf::from("/home/user/Projects"),
                 PathBuf::from("/opt/code")
-            ]
+            ])
         );
     }
 

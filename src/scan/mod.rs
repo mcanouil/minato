@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::config::ResolvedRoots;
 use crate::git;
 use crate::model::RepoId;
 
@@ -248,11 +249,11 @@ pub struct Scan {
 /// Reading is parallel, since each clone costs several `git` invocations and
 /// they are independent.
 #[must_use]
-pub fn scan(roots: &[PathBuf], max_depth: usize) -> Scan {
+pub fn scan(roots: &ResolvedRoots, max_depth: usize) -> Scan {
     let mut directories: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut failures = Vec::new();
 
-    for root in roots {
+    for root in roots.iter() {
         let mut found = Vec::new();
 
         if let Err(failure) = collect(root, max_depth, &mut found) {

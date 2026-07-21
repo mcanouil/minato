@@ -7,7 +7,13 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use minato::config::ResolvedRoots;
 use minato::scan::{self, Head};
+
+/// Wraps temporary directory paths, already absolute, as resolved scan roots.
+fn roots(paths: Vec<PathBuf>) -> ResolvedRoots {
+    ResolvedRoots::from_resolved(paths)
+}
 
 /// Runs `git` in `directory`, panicking with its output when it fails.
 fn git(directory: &Path, arguments: &[&str]) -> String {
@@ -326,7 +332,10 @@ fn finds_clones_nested_under_a_layout() {
 
     std::fs::create_dir_all(root.path().join("not-a-repository")).expect("a directory");
 
-    let found = scan::scan(&[root.path().to_owned()], scan::DEFAULT_MAX_DEPTH);
+    let found = scan::scan(
+        &roots(vec![root.path().to_owned()]),
+        scan::DEFAULT_MAX_DEPTH,
+    );
 
     assert_eq!(found.repositories.len(), 2);
     assert!(found.failures.is_empty());
@@ -343,7 +352,10 @@ fn does_not_descend_into_a_clone_it_has_already_found() {
     init_repository(&inner);
     commit(&inner, "first");
 
-    let found = scan::scan(&[root.path().to_owned()], scan::DEFAULT_MAX_DEPTH);
+    let found = scan::scan(
+        &roots(vec![root.path().to_owned()]),
+        scan::DEFAULT_MAX_DEPTH,
+    );
 
     assert_eq!(
         found.repositories.len(),
@@ -361,20 +373,22 @@ fn stops_at_the_depth_limit() {
     commit(&deep, "first");
 
     assert!(
-        scan::scan(&[root.path().to_owned()], 2)
+        scan::scan(&roots(vec![root.path().to_owned()]), 2)
             .repositories
             .is_empty(),
         "a shallow scan should not walk the whole tree"
     );
     assert_eq!(
-        scan::scan(&[root.path().to_owned()], 8).repositories.len(),
+        scan::scan(&roots(vec![root.path().to_owned()]), 8)
+            .repositories
+            .len(),
         1
     );
 }
 
 #[test]
 fn reports_a_root_that_does_not_exist_rather_than_finding_nothing() {
-    let found = scan::scan(&[PathBuf::from("/nonexistent/root")], 2);
+    let found = scan::scan(&roots(vec![PathBuf::from("/nonexistent/root")]), 2);
 
     assert!(found.repositories.is_empty());
     assert_eq!(
@@ -399,8 +413,8 @@ fn returns_clones_in_a_stable_order() {
         commit(&full, "first");
     }
 
-    let first = scan::scan(&[root.path().to_owned()], 2);
-    let second = scan::scan(&[root.path().to_owned()], 2);
+    let first = scan::scan(&roots(vec![root.path().to_owned()]), 2);
+    let second = scan::scan(&roots(vec![root.path().to_owned()]), 2);
 
     let paths: Vec<_> = first.repositories.iter().map(|repo| &repo.path).collect();
     let again: Vec<_> = second.repositories.iter().map(|repo| &repo.path).collect();
@@ -417,7 +431,7 @@ fn scans_the_same_root_once_even_when_it_is_listed_twice() {
     commit(&path, "first");
 
     let found = scan::scan(
-        &[root.path().to_owned(), root.path().to_owned()],
+        &roots(vec![root.path().to_owned(), root.path().to_owned()]),
         scan::DEFAULT_MAX_DEPTH,
     );
 
