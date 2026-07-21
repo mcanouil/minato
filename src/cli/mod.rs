@@ -439,6 +439,7 @@ async fn sync_fork(cli: &Cli, mode: Mode) -> Result<Output, CliError> {
     let config = Config::load_from(&paths.config)?;
     let gathered = gather(cli, &paths, &config).await?;
 
+    let filter = cli.filter();
     let mut reports = Vec::new();
     let mut client = None;
 
@@ -447,12 +448,7 @@ async fn sync_fork(cli: &Cli, mode: Mode) -> Result<Output, CliError> {
             continue;
         }
 
-        if !cli.owners.is_empty()
-            && !cli
-                .owners
-                .iter()
-                .any(|owner| owner.eq_ignore_ascii_case(&repo.id.owner))
-        {
+        if !filter.owner_matches(&repo.id.owner) {
             continue;
         }
 
@@ -836,10 +832,11 @@ async fn list(cli: &Cli) -> Result<String, CliError> {
     let config = Config::load_from(&paths.config)?;
     let gathered = gather(cli, &paths, &config).await?;
 
+    let filter = cli.filter();
     let remotes: Vec<_> = gathered
         .remotes
         .iter()
-        .filter(|repo| cli.include_forks || !repo.is_fork)
+        .filter(|repo| filter.owner_matches(&repo.id.owner) && (cli.include_forks || !repo.is_fork))
         .collect();
 
     if cli.json {
