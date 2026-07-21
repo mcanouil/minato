@@ -217,6 +217,16 @@ pub enum ParseRepoIdError {
         character: char,
     },
 
+    /// The owner or the name was `.` or `..`, which is not a real one and could
+    /// escape a directory when used to build a path.
+    #[error("repository `{input}` has `.` or `..` as its {part}, which is not a real {part}")]
+    ReservedPart {
+        /// The text that failed to parse.
+        input: String,
+        /// Which part was reserved.
+        part: &'static str,
+    },
+
     /// The provider prefix was present but not recognised.
     #[error(transparent)]
     UnknownProvider(#[from] UnknownProviderError),
@@ -226,6 +236,16 @@ pub enum ParseRepoIdError {
 fn check_part(input: &str, part: &'static str, value: &str) -> Result<(), ParseRepoIdError> {
     if value.is_empty() {
         return Err(ParseRepoIdError::EmptyPart {
+            input: input.to_owned(),
+            part,
+        });
+    }
+
+    // `.` and `..` pass the character check (a dot is allowed), but neither is a
+    // real owner or name and both would traverse directories once joined into a
+    // path, so they are rejected outright.
+    if value == "." || value == ".." {
+        return Err(ParseRepoIdError::ReservedPart {
             input: input.to_owned(),
             part,
         });
@@ -477,6 +497,22 @@ mod tests {
         assert!(matches!(
             "github:mcanouil/".parse::<RepoId>().unwrap_err(),
             ParseRepoIdError::EmptyPart { part: "name", .. }
+        ));
+    }
+
+    #[test]
+    fn rejects_a_dot_only_owner_or_name_that_could_escape_a_directory() {
+        assert!(matches!(
+            "github:../minato".parse::<RepoId>().unwrap_err(),
+            ParseRepoIdError::ReservedPart { part: "owner", .. }
+        ));
+        assert!(matches!(
+            "github:mcanouil/..".parse::<RepoId>().unwrap_err(),
+            ParseRepoIdError::ReservedPart { part: "name", .. }
+        ));
+        assert!(matches!(
+            "github:./minato".parse::<RepoId>().unwrap_err(),
+            ParseRepoIdError::ReservedPart { part: "owner", .. }
         ));
     }
 
