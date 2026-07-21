@@ -14,7 +14,7 @@ use serde::Serialize;
 use std::fmt::Write as _;
 
 use crate::actions::{self, Mode};
-use crate::cache::{Cache, DEFAULT_TTL};
+use crate::cache::Cache;
 use crate::compare::{self, Comparison, State, TrackedOwners};
 use crate::config::{self, Config};
 use crate::filter::{self, Filter};
@@ -643,7 +643,7 @@ async fn gather(cli: &Cli, paths: &Paths, config: &Config) -> Result<Gathered, C
 
         if !cli.refresh
             && let Some(cached) = paths.cache.load::<Vec<RemoteRepo>>(&key)
-            && !cached.is_stale(now, DEFAULT_TTL)
+            && !cached.is_stale(now, config.cache.ttl)
         {
             let age = cached.age(now);
             staleness = Some(staleness.map_or(age, |worst| worst.max(age)));

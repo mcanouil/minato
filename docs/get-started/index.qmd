@@ -69,6 +69,9 @@ orgs = []
 roots = ["~/Projects"]
 layout = "{repo}"
 protocol = "ssh"
+
+[cache]
+ttl = "15m"
 ```
 
 `roots` are searched for existing clones.
@@ -97,8 +100,8 @@ ok  cache          /Users/you/.cache/minato
 minato status --state drifted
 ```
 
-Provider responses are cached for fifteen minutes, so a second run is effectively instant, and cached output always says how old it is.
-Add `--refresh` to ask again.
+Provider responses are cached for the `cache.ttl` window, fifteen minutes by default, so a second run is effectively instant, and cached output always says how old it is.
+Set `cache.ttl` to any friendly duration such as `"1h"`, or add `--refresh` to ask again straight away.
 
 ## Close the gap
 
