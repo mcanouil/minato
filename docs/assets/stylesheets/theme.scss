@@ -405,6 +405,21 @@ header#title-block-header h1.title {
     }
   }
 
+  // Below the expand breakpoint Bootstrap forces a native navbar
+  // `.dropdown-menu` to `position: static`, so an open menu flows in-document
+  // and grows the navbar instead of overlaying. Re-anchor it to absolute
+  // against a relative `.nav-item`, the way the custom widget menu already
+  // behaves. Bootstrap's base `z-index: 1000` is kept.
+  .navbar .navbar-collapse .navbar-nav .nav-item.dropdown {
+    position: relative;
+  }
+
+  .navbar .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+  }
+
   .navbar .gh-dropdown {
     left: 0;
     right: auto;
