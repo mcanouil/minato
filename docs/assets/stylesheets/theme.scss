@@ -167,6 +167,20 @@ header#title-block-header h1.title {
   letter-spacing: -0.01em;
 }
 
+// Quarto's brand container adds its own vertical padding on top of the
+// navbar's `--bs-navbar-padding-y`, so the bar ends up almost twice the height
+// of its content. Drop the container's vertical padding (keeping the right gap
+// to the search box) so the navbar hugs its contents.
+.navbar .navbar-brand-container {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.navbar .navbar-brand {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .navbar .nav-link {
   position: relative;
   transition: color 0.2s ease;
