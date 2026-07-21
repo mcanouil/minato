@@ -469,6 +469,37 @@ fn reports_a_symlinked_directory_rather_than_following_it() {
 }
 
 #[test]
+fn reports_a_clone_it_cannot_read_rather_than_dropping_it() {
+    // A `.git` file pointing at a gitdir that does not exist looks like a clone
+    // (the `.git` entry is present) but makes `git status` fail, standing in for
+    // a corrupt index or a dubious-ownership refusal.
+    let root = tempfile::tempdir().expect("a temporary directory");
+    let broken = root.path().join("broken");
+    std::fs::create_dir_all(&broken).expect("the directory");
+    std::fs::write(broken.join(".git"), "gitdir: /nonexistent/gitdir\n").expect("a gitfile");
+
+    let found = scan::scan(
+        &roots(vec![root.path().to_owned()]),
+        scan::DEFAULT_MAX_DEPTH,
+    );
+
+    assert!(
+        found.repositories.is_empty(),
+        "a clone that cannot be read is not reported as a healthy repository"
+    );
+    assert_eq!(
+        found.failures.len(),
+        1,
+        "the unreadable clone is reported rather than silently dropped"
+    );
+    assert!(
+        found.failures[0].to_string().contains("broken"),
+        "the failure names the clone, got: {}",
+        found.failures[0]
+    );
+}
+
+#[test]
 fn reports_a_bare_repository_rather_than_treating_it_as_a_clone() {
     let root = tempfile::tempdir().expect("a temporary directory");
     let bare = root.path().join("mirror.git");

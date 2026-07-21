@@ -289,12 +289,29 @@ pub fn scan(roots: &ResolvedRoots, max_depth: usize) -> Scan {
     skipped_bare.sort();
     skipped_bare.dedup();
 
-    let mut repositories: Vec<_> = directories
+    // A clone that cannot be read is reported rather than dropped: dropping it
+    // would make its remote look like it was never cloned, which is false. The
+    // read is parallel; the results are split afterwards.
+    let results: Vec<Result<LocalRepo, ScanError>> = directories
         .par_iter()
-        .filter_map(|(directory, root)| read_within(directory, Some(root)).ok())
+        .map(|(directory, root)| {
+            read_within(directory, Some(root)).map_err(|error| ScanError {
+                root: directory.clone(),
+                message: error.to_string(),
+            })
+        })
         .collect();
 
+    let mut repositories = Vec::new();
+    for result in results {
+        match result {
+            Ok(repository) => repositories.push(repository),
+            Err(failure) => failures.push(failure),
+        }
+    }
+
     repositories.sort_by(|left, right| left.path.cmp(&right.path));
+    failures.sort_by(|left, right| left.root.cmp(&right.root));
 
     Scan {
         repositories,
