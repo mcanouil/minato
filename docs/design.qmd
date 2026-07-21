@@ -40,6 +40,9 @@ Rate limiting is handled by honouring the reset and retry headers with exponenti
 
 ## Comparison state machine
 
+The framing behind comparison is that local clones are a backup of remote state: what a provider hosts should also exist on disk, and comparison reports where the two have fallen out of step.
+That is why `RemoteOnly` matters at all, and why bulk clone exists: a hosted repository with no clone is not backed up locally.
+
 Comparison is a pure function.
 It takes an optional remote repository, an optional local clone, and the upstream relationship, and returns exactly one primary state plus a set of orthogonal flags.
 
@@ -47,8 +50,8 @@ Primary states:
 
 | State | Meaning |
 | --- | --- |
-| `RemoteOnly` | Known to the provider, with no local clone under any configured root. |
-| `LocalOnly` | A local clone that no reported repository corresponds to. |
+| `RemoteOnly` | Hosted by the provider, with no local clone under any configured root, so it is not backed up locally. |
+| `LocalOnly` | A local clone with no reported repository behind it, so it is the only copy. |
 | `InSync` | The default branch matches its remote-tracking ref. |
 | `Ahead` | Local commits not present on the remote. |
 | `Behind` | Remote commits not present locally, with no local divergence. |

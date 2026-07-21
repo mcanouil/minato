@@ -244,7 +244,7 @@ fn describe_state(state: &State) -> (String, Style) {
     let plain = Style::default();
 
     match state {
-        State::RemoteOnly => ("not cloned".to_owned(), Style::default().fg(Color::Blue)),
+        State::RemoteOnly => ("not backed up".to_owned(), Style::default().fg(Color::Blue)),
         State::InSync => ("in sync".to_owned(), Style::default().fg(Color::Green)),
         State::Ahead { ahead } => (format!("ahead {ahead}"), yellow),
         State::Behind { behind } => (format!("behind {behind}"), yellow),
@@ -378,7 +378,7 @@ mod rendering {
 
         assert!(rendered.contains("minato"), "{rendered}");
         assert!(rendered.contains("behind 3"), "{rendered}");
-        assert!(rendered.contains("not cloned"), "{rendered}");
+        assert!(rendered.contains("not backed up"), "{rendered}");
         assert!(rendered.contains("perso"), "{rendered}");
         assert!(rendered.contains("dirty"), "{rendered}");
     }
@@ -406,7 +406,7 @@ mod rendering {
         let rendered = screen(&app);
 
         assert!(rendered.contains("/other"), "{rendered}");
-        assert!(rendered.contains("not cloned"), "{rendered}");
+        assert!(rendered.contains("not backed up"), "{rendered}");
         assert!(
             !rendered.contains("behind 3"),
             "the row that does not match should be gone:\n{rendered}"

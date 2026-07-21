@@ -828,7 +828,7 @@ fn describe_state(state: &State) -> String {
     use compare::{IncomparableReason, LocalOnlyReason};
 
     match state {
-        State::RemoteOnly => "not cloned".to_owned(),
+        State::RemoteOnly => "not backed up".to_owned(),
         State::InSync => "in sync".to_owned(),
         State::Ahead { ahead } => format!("ahead {ahead}"),
         State::Behind { behind } => format!("behind {behind}"),
@@ -927,7 +927,7 @@ mod tests {
     fn a_state_reads_without_needing_a_legend() {
         use compare::LocalOnlyReason;
 
-        assert_eq!(describe_state(&State::RemoteOnly), "not cloned");
+        assert_eq!(describe_state(&State::RemoteOnly), "not backed up");
         assert_eq!(describe_state(&State::Behind { behind: 3 }), "behind 3");
         assert_eq!(
             describe_state(&State::Diverged {

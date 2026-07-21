@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - feat: report how far a fork trails the repository it was forked from (#13).
 - feat: configure how long provider responses stay cached with `cache.ttl`, defaulting to fifteen minutes (#27).
 - feat: hide forks and clones of untracked owners by default, with `--include-forks` and `--include-external` to show them (#30).
+- feat: frame local clones as a backup of remote state in the docs and output, so a repository with no clone reads as "not backed up" rather than a bare "not cloned" (#34).
 
 ### Bug Fixes
 
