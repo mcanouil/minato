@@ -93,16 +93,28 @@ impl Filter {
             .collect()
     }
 
+    /// Whether an owner is one of those named, or none were named.
+    ///
+    /// This is the owner condition on its own, so a command working from remote
+    /// repositories rather than comparisons can honour `--owner` too.
+    #[must_use]
+    pub fn owner_matches(&self, owner: &str) -> bool {
+        self.owners.is_empty()
+            || self
+                .owners
+                .iter()
+                .any(|named| named.eq_ignore_ascii_case(owner))
+    }
+
     fn accepts_owner(&self, comparison: &Comparison) -> bool {
         if self.owners.is_empty() {
             return true;
         }
 
-        comparison.id.as_ref().is_some_and(|id| {
-            self.owners
-                .iter()
-                .any(|owner| owner.eq_ignore_ascii_case(&id.owner))
-        })
+        comparison
+            .id
+            .as_ref()
+            .is_some_and(|id| self.owner_matches(&id.owner))
     }
 
     fn accepts_group(&self, comparison: &Comparison) -> bool {
@@ -175,6 +187,21 @@ mod tests {
         ];
 
         assert_eq!(Filter::default().apply(all.clone()).len(), all.len());
+    }
+
+    #[test]
+    fn owner_matches_is_case_insensitive_and_open_when_none_are_named() {
+        assert!(
+            Filter::default().owner_matches("anyone"),
+            "naming no owner keeps every owner"
+        );
+
+        let named = Filter {
+            owners: vec!["McAnouil".to_owned()],
+            ..Filter::default()
+        };
+        assert!(named.owner_matches("mcanouil"));
+        assert!(!named.owner_matches("someone-else"));
     }
 
     #[test]
