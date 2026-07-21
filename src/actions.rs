@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use rayon::prelude::*;
 use serde::Serialize;
 
-use crate::compare::Comparison;
+use crate::compare::{Comparison, LocalOnlyReason, State};
 use crate::config::Local;
 use crate::git;
 use crate::model::{CloneProtocol, RepoId};
@@ -222,8 +222,21 @@ pub fn fetch_all(comparisons: &[Comparison], mode: Mode) -> Summary {
         .par_iter()
         .filter_map(|comparison| {
             let path = comparison.path.clone()?;
-            let detail = format!("fetch {}", path.display());
-            let outcome = mode.permitted(detail, || git::fetch(&path));
+
+            // A clone with no `origin` remote has nothing to fetch from, so
+            // `git fetch` would only fail; report it as skipped instead, which
+            // keeps one never-published clone from failing the whole batch.
+            let outcome = if matches!(
+                comparison.state,
+                State::LocalOnly(LocalOnlyReason::NoRemote)
+            ) {
+                Outcome::Skipped {
+                    reason: "it has no remote to fetch from".to_owned(),
+                }
+            } else {
+                let detail = format!("fetch {}", path.display());
+                mode.permitted(detail, || git::fetch(&path))
+            };
 
             Some(Report {
                 id: comparison.id.clone(),
@@ -471,7 +484,7 @@ pub fn move_to_group(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compare::{LocalFlags, State};
+    use crate::compare::{LocalFlags, LocalOnlyReason, State};
     use crate::config::Protocol;
     use crate::model::Provider;
 
@@ -506,6 +519,23 @@ mod tests {
         assert_eq!(
             clone_destination(Path::new("/code"), "{provider}/{owner}/{repo}", &id),
             PathBuf::from("/code/github/mcanouil/minato")
+        );
+    }
+
+    #[test]
+    fn fetch_skips_a_clone_with_no_remote_rather_than_attempting_it() {
+        let summary = fetch_all(
+            &[comparison(
+                State::LocalOnly(LocalOnlyReason::NoRemote),
+                Some("/code/orphan"),
+            )],
+            Mode::DryRun,
+        );
+
+        assert!(
+            matches!(summary.reports[0].outcome, Outcome::Skipped { .. }),
+            "a clone with no remote has nothing to fetch from, got: {:?}",
+            summary.reports[0].outcome
         );
     }
 
