@@ -670,3 +670,61 @@ async fn a_fork_that_cannot_be_compared_is_unknown_rather_than_level() {
         "a fork with no visible parent must not look up to date with it"
     );
 }
+
+/// A server that accepts each connection, reads the request, then drops the
+/// socket without replying, the way GitHub cancels a response it has begun.
+///
+/// It counts the connections it accepted, so a test can tell whether the client
+/// tried again. The thread is detached and left blocked on `accept`; the
+/// process ends it, and a bound socket costs nothing.
+fn dropping_listener() -> (String, std::sync::Arc<std::sync::atomic::AtomicU32>) {
+    use std::io::Read as _;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a listener");
+    let address = listener.local_addr().expect("an address");
+    let connections = Arc::new(AtomicU32::new(0));
+
+    let seen = Arc::clone(&connections);
+    std::thread::spawn(move || {
+        while let Ok((mut socket, _)) = listener.accept() {
+            seen.fetch_add(1, Ordering::SeqCst);
+            let _ = socket.read(&mut [0_u8; 1024]);
+        }
+    });
+
+    (format!("http://{address}"), connections)
+}
+
+#[tokio::test]
+async fn retries_a_connection_reset_mid_response() {
+    use std::sync::atomic::Ordering;
+
+    let (endpoint, connections) = dropping_listener();
+
+    let client = GitHubClient::with_endpoint(Token::new("test-token"), None, endpoint)
+        .expect("a client")
+        .with_retry(impatient());
+
+    let error = tokio::time::timeout(
+        Duration::from_secs(10),
+        client.repositories(&Account::new("mcanouil")),
+    )
+    .await
+    .expect("an error rather than a hang")
+    .expect_err("a dropped connection should fail once retries are spent");
+
+    // A reset after the connection was made is treated as transient throttling,
+    // so it is retried rather than surfaced at once as a transport error.
+    assert!(
+        matches!(error, GitHubError::RateLimited { .. }),
+        "a reset should be retried as throttling, got: {error}"
+    );
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(
+        connections.load(Ordering::SeqCst),
+        2,
+        "the impatient policy should make one retry, so two connections in all"
+    );
+}

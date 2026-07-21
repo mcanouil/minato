@@ -484,10 +484,7 @@ impl GitHubClient {
             })
             .send()
             .await
-            .map_err(|source| GitHubError::Transport {
-                account: login.to_owned(),
-                source,
-            })?;
+            .map_err(|source| transport_failure(login, source))?;
 
         let status = response.status();
         let headers = response.headers().clone();
@@ -526,10 +523,7 @@ impl GitHubClient {
         let body = response
             .text()
             .await
-            .map_err(|source| GitHubError::Transport {
-                account: login.to_owned(),
-                source,
-            })?;
+            .map_err(|source| transport_failure(login, source))?;
 
         let parsed: Response<RepositoriesData> = serde_json::from_str(&body).map_err(|source| {
             PageFailure::Failed(GitHubError::Malformed {
@@ -576,6 +570,28 @@ impl GitHubClient {
                 .into()
             })
     }
+}
+
+/// Turns a transport error into a page failure, retrying the transient ones.
+///
+/// A failure to connect at all is permanent for this run, so it is surfaced at
+/// once rather than slept over. A failure after the connection was made, most
+/// importantly an HTTP/2 stream reset, is how GitHub cancels a response it has
+/// already begun answering: it is transient, effectively another way it says to
+/// slow down, and the read-only listing is safe to send again.
+fn transport_failure(account: &str, source: reqwest::Error) -> PageFailure {
+    if source.is_connect() {
+        return PageFailure::Failed(GitHubError::Transport {
+            account: account.to_owned(),
+            source,
+        });
+    }
+
+    PageFailure::Throttled(Throttle {
+        retry_after: None,
+        reset: None,
+        transient: true,
+    })
 }
 
 /// Classifies a response as throttled, and says whether waiting could help.

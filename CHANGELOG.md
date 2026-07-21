@@ -14,3 +14,7 @@ All notable changes to this project will be documented in this file.
 - feat: report how far a fork trails the repository it was forked from (#13).
 - feat: configure how long provider responses stay cached with `cache.ttl`, defaulting to fifteen minutes (#27).
 - feat: hide forks and clones of untracked owners by default, with `--include-forks` and `--include-external` to show them (#30).
+
+### Bug Fixes
+
+- fix: retry a transient stream or connection reset while listing, so one cancelled response no longer fails a run enumerating several accounts (#31).
