@@ -160,6 +160,14 @@ header#title-block-header h1.title {
 // NAVBAR + FOOTER (the night palette in both schemes via background: dark)
 // ===========================================================================
 
+// A border and a faint shadow delimit the navbar from the content beneath it,
+// which matters most in dark mode where the navbar and the page background are
+// close in colour. Adapted from quarto-wizard.
+.navbar {
+  border-bottom: 1px solid var(--mn-navbar-border);
+  box-shadow: 0 1px 0 rgb(79 179 196 / 0.06);
+}
+
 .navbar .navbar-brand,
 .navbar-title {
   font-family: var(--bs-headings-font-family, inherit);
@@ -683,6 +691,15 @@ div.code-with-filename pre.sourceCode {
 // ===========================================================================
 // LANDING PAGE (minato's own: harbour hero, state legend, feature cards)
 // ===========================================================================
+
+// On the landing page the hero should begin flush under the navbar, with no
+// band of page background between them. Quarto keeps the title-block's top
+// spacing on `main` even when the title block is hidden, so remove it where a
+// hero is present. Scoped by `:has()` so other pages keep their breathing room.
+#quarto-content:has(.hero) main {
+  margin-top: 0;
+  padding-top: 0;
+}
 
 .hero {
   position: relative;
