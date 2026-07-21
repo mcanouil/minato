@@ -116,6 +116,17 @@ pub enum Command {
         dry_run: bool,
     },
 
+    /// Sync forks with their upstream, fast-forward only.
+    ///
+    /// Only a fork strictly behind its upstream is synced, through GitHub's
+    /// merge-upstream. A fork holding its own commits is reported and left
+    /// alone rather than merged, so history is never rewritten.
+    SyncFork {
+        /// Report what would be synced, and change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Move one repository into a group, which moves it on disk.
     ///
     /// Deliberately one repository at a time: this changes the filesystem, so
@@ -276,6 +287,7 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
         }
         Command::Fetch { dry_run } => act(cli, Act::Fetch, mode(*dry_run)).await,
         Command::Update { dry_run } => act(cli, Act::Update, mode(*dry_run)).await,
+        Command::SyncFork { dry_run } => sync_fork(cli, mode(*dry_run)).await,
         Command::Move {
             repository,
             group,
@@ -391,6 +403,115 @@ fn render_summary(summary: &actions::Summary) -> String {
     );
 
     out
+}
+
+/// Syncs forks that are strictly behind their upstream, fast-forward only.
+///
+/// A fork holding its own commits cannot be fast-forwarded, so it is reported
+/// and left alone rather than merged. Only GitHub's merge-upstream is used, so
+/// nothing is cloned or pushed and no history is rewritten.
+async fn sync_fork(cli: &Cli, mode: Mode) -> Result<Output, CliError> {
+    let paths = paths()?;
+    let config = Config::load_from(&paths.config)?;
+    let gathered = gather(cli, &paths, &config).await?;
+
+    let mut reports = Vec::new();
+    let mut client = None;
+
+    for repo in &gathered.remotes {
+        if !repo.is_fork {
+            continue;
+        }
+
+        if !cli.owners.is_empty()
+            && !cli
+                .owners
+                .iter()
+                .any(|owner| owner.eq_ignore_ascii_case(&repo.id.owner))
+        {
+            continue;
+        }
+
+        let Some(standing) = repo.metadata.upstream else {
+            continue;
+        };
+
+        // A fork level with its upstream needs nothing, so it is not reported.
+        if !standing.is_behind() {
+            continue;
+        }
+
+        if !standing.can_fast_forward() {
+            reports.push(sync_report(
+                repo,
+                actions::Outcome::Skipped {
+                    reason: format!(
+                        "diverged: {} ahead of upstream and {} behind",
+                        standing.ahead, standing.behind
+                    ),
+                },
+            ));
+            continue;
+        }
+
+        let Some(branch) = repo.default_branch.as_deref() else {
+            reports.push(sync_report(
+                repo,
+                actions::Outcome::Skipped {
+                    reason: "no default branch to sync".to_owned(),
+                },
+            ));
+            continue;
+        };
+
+        let detail = format!(
+            "sync {} commits from upstream onto {branch}",
+            standing.behind
+        );
+
+        let outcome = match mode {
+            Mode::DryRun => actions::Outcome::Would { detail },
+            Mode::Execute => {
+                // The client is built once, and only when a fork actually needs
+                // syncing, so a rehearsal never asks for a token.
+                let client = if let Some(client) = &client {
+                    client
+                } else {
+                    let (token, source) = auth::resolve_token_from_system()?;
+                    client.insert(GitHubClient::new(token, Some(source))?)
+                };
+
+                match client.merge_upstream(&repo.id, branch).await {
+                    Ok(()) => actions::Outcome::Done { detail },
+                    Err(error) => actions::Outcome::Failed {
+                        error: error.to_string(),
+                    },
+                }
+            }
+        };
+
+        reports.push(sync_report(repo, outcome));
+    }
+
+    let summary = actions::Summary { reports };
+    let failed = summary.has_failures();
+
+    let text = if cli.json {
+        serde_json::to_string_pretty(&summary)?
+    } else {
+        render_summary(&summary)
+    };
+
+    Ok(Output { text, failed })
+}
+
+/// Builds a report for a fork, which has no path since it is a remote action.
+fn sync_report(repo: &crate::model::RemoteRepo, outcome: actions::Outcome) -> actions::Report {
+    actions::Report {
+        id: Some(repo.id.clone()),
+        path: None,
+        outcome,
+    }
 }
 
 /// Moves one repository into a group.

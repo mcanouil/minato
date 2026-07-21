@@ -7,6 +7,7 @@
 use std::time::Duration;
 
 use minato::github::{Account, GitHubClient, GitHubError, RetryPolicy, Token};
+use minato::model::{Provider, RepoId};
 use serde_json::json;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate};
@@ -668,6 +669,49 @@ async fn a_fork_that_cannot_be_compared_is_unknown_rather_than_level() {
     assert_eq!(
         repositories[0].metadata.upstream, None,
         "a fork with no visible parent must not look up to date with it"
+    );
+}
+
+#[tokio::test]
+async fn merge_upstream_fast_forwards_a_fork() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/repos/mcanouil/forked/merge-upstream"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                json!({ "merge_type": "fast-forward", "message": "Fast-forwarded" }),
+            ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    client_for(&server)
+        .merge_upstream(&RepoId::new(Provider::GitHub, "mcanouil", "forked"), "main")
+        .await
+        .expect("the sync to succeed");
+}
+
+#[tokio::test]
+async fn merge_upstream_reports_a_diverged_fork_rather_than_merging() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/repos/mcanouil/forked/merge-upstream"))
+        .respond_with(ResponseTemplate::new(409))
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server)
+        .merge_upstream(&RepoId::new(Provider::GitHub, "mcanouil", "forked"), "main")
+        .await
+        .expect_err("a diverged fork cannot be fast-forwarded");
+
+    assert!(matches!(error, GitHubError::SyncFailed { .. }));
+    assert!(
+        error.to_string().contains("diverged"),
+        "the error should explain why, got: {error}"
     );
 }
 
