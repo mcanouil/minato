@@ -4,14 +4,9 @@
 
 name: Deploy Documentation
 
+# The site deploys at release, through the Release workflow's call below, or on
+# manual dispatch; ordinary pushes to main do not touch Pages.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "docs/**"
-      - "README.md"
-      - "CHANGELOG.md"
-      - ".github/workflows/deploy.yml"
   workflow_dispatch:
   workflow_call:
     inputs:

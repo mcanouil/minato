@@ -3,9 +3,19 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore: ["docs/**"]
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - ".devcontainer/**"
   pull_request:
-    paths-ignore: ["docs/**"]
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - ".devcontainer/**"
 
 permissions:
   contents: read
@@ -47,8 +57,10 @@ jobs:
     name: Test (${{ matrix.os }})
     strategy:
       fail-fast: false
+      # macOS and Windows minutes bill at 10x and 2x, so pull requests test on
+      # Ubuntu only; the push to main covers all three platforms.
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ github.event_name == 'push' && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
