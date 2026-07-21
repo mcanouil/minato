@@ -30,6 +30,7 @@ Some remotes are never cloned, some clones are abandoned, and forks fall behind 
 
 ## What it tells you
 
+Local clones are a backup of what a provider hosts, so a repository with no clone is not backed up, and a clone with nothing behind it is the only copy left.
 Every repository lands in exactly one state, and the reason travels with it.
 
 ::: {.states}
@@ -37,7 +38,7 @@ Every repository lands in exactly one state, and the reason travels with it.
 [behind 12]{.state .state-behind}
 [ahead 2]{.state .state-ahead}
 [diverged +4/-1]{.state .state-diverged}
-[not cloned]{.state .state-uncloned}
+[not backed up]{.state .state-uncloned}
 :::
 
 ```{.bash filename="Terminal"}

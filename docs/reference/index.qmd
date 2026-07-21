@@ -28,12 +28,12 @@ Add `--include-forks` or `--include-external` to bring either back.
 
 | Value | Means |
 | --- | --- |
-| `not-cloned` | Reported by the provider, with no local clone. |
+| `not-cloned` | Reported by the provider, with no local clone, so it is not backed up locally. |
 | `in-sync` | Matching the remote exactly. |
 | `ahead` | Holding commits the remote does not. |
 | `behind` | Missing commits the remote has. |
 | `diverged` | Both sides hold commits the other lacks. |
-| `local-only` | A clone no reported repository corresponds to. |
+| `local-only` | A clone no reported repository corresponds to, so it is the only copy. |
 | `incomparable` | A clone that cannot be compared, such as one with no commits or a detached head. |
 | `drifted` | Anything that is not in sync, which is usually what wants attention. |
 
