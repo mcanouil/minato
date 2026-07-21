@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - feat: hide forks and clones of untracked owners by default, with `--include-forks` and `--include-external` to show them (#30).
 - feat: frame local clones as a backup of remote state in the docs and output, so a repository with no clone reads as "not backed up" rather than a bare "not cloned" (#34).
 - feat: sync forks with their upstream through GitHub's merge-upstream with `minato sync-fork`, fast-forward only and with `--dry-run`, leaving a diverged fork reported rather than merged (#36).
+- feat: generate the command reference from the command-line definitions, gated in CI so the documented commands and flags cannot drift from the binary (#37).
 
 ### Bug Fixes
 

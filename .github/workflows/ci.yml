@@ -38,6 +38,11 @@ jobs:
       - name: Lint
         run: cargo clippy --locked --all-targets
 
+      - name: Check the command reference is up to date
+        run: |
+          cargo run --quiet --example reference > docs/reference/commands.qmd
+          git diff --exit-code docs/reference/commands.qmd
+
   test:
     name: Test (${{ matrix.os }})
     strategy:
