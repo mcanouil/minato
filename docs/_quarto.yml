@@ -90,8 +90,13 @@ format:
       sidebar-width: 280px
       body-width: 1000px
       margin-width: 260px
+    include-before-body:
+      - assets/scripts/skip-link.html
     include-after-body:
+      # The widget swaps its navbar item last, after the accessibility and
+      # tooltip passes have run over the original markup.
       - assets/scripts/current-year.html
       - assets/scripts/external-links.html
-      - assets/scripts/tooltips.html
+      - assets/scripts/a11y-fixes.html
+      - assets/scripts/navbar-tooltips.html
       - assets/scripts/github-widget.html

@@ -3,168 +3,674 @@
 // @copyright 2026 Mickaël Canouil
 // @author Mickaël Canouil
 
-// Palette tokens, kept in sync with docs/_brand.yml. Brand compiles the real
-// values per colour scheme; these name them for the rules below.
-$deep-water: #0c1620;
-$slack-water: #152836;
-$mist: #f7f9fb;
-$surface-light: #ffffff;
-$ink: #16242f;
-$foam: #e6edf3;
-$muted-light: #4d6472;
-$muted-dark: #93a9b7;
-$harbour: #0e6e7d;
-$harbour-light: #4fb3c4;
-$lantern: #c2661b;
-$lantern-light: #f0a555;
-$rope: #2a4a5c;
-$rope-light: #8fa9b8;
-$moss: #2f7d5c;
-$moss-light: #5fbf92;
-$signal: #b23a2b;
-$signal-light: #e8776a;
+// Adapted from quarto-wizard's stylesheet: colours are driven at runtime by CSS
+// custom properties so a single sheet is correct in both Quarto light and dark
+// themes, and code surfaces come from body-mix() rather than a hard-coded second
+// palette. Fonts come from _brand.yml. The wizard's night-sky animation is left
+// out; minato keeps its own harbour hero.
 
-$font-family-sans-serif: "Inter", "Helvetica Neue", Arial, sans-serif !default;
+$headings-font-weight: 700;
+$border-radius: 0.5rem;
+$border-radius-sm: 0.375rem;
+$border-radius-lg: 0.75rem;
+$enable-smooth-scroll: true;
+
 $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace !default;
-$headings-font-family: "Outfit", $font-family-sans-serif !default;
-$headings-font-weight: 600 !default;
-$headings-line-height: 1.25 !default;
 
-$border-radius: 0.5rem !default;
-$border-radius-sm: 0.3rem !default;
-$border-radius-lg: 0.875rem !default;
+/*-- scss:functions --*/
 
-$primary: $harbour !default;
-$secondary: $rope !default;
-$success: $moss !default;
-$warning: $lantern !default;
-$danger: $signal !default;
-$info: $harbour !default;
-
-$link-decoration: none !default;
-
-
-// Colour-scheme toggle glyphs, taken from quarto-wizard so the control looks
-// the same across these sites. Quarto renders an empty `<i class="bi">`, so the
-// shape is painted as a mask and the colour follows `currentColor`.
-$icon-sun: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="black" viewBox="0 0 16 16"><path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>');
-$icon-moon: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="black" viewBox="0 0 16 16"><path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/><path d="M10.794 3.148a.217.217 0 0 1 .412 0l.387 1.162c.173.518.579.924 1.097 1.097l1.162.387a.217.217 0 0 1 0 .412l-1.162.387a1.73 1.73 0 0 0-1.097 1.097l-.387 1.162a.217.217 0 0 1-.412 0l-.387-1.162A1.73 1.73 0 0 0 9.31 6.593l-1.162-.387a.217.217 0 0 1 0-.412l1.162-.387a1.73 1.73 0 0 0 1.097-1.097zM13.863.099a.145.145 0 0 1 .274 0l.258.774c.115.346.386.617.732.732l.774.258a.145.145 0 0 1 0 .274l-.774.258a1.16 1.16 0 0 0-.732.732l-.258.774a.145.145 0 0 1-.274 0l-.258-.774a1.16 1.16 0 0 0-.732-.732l-.774-.258a.145.145 0 0 1 0-.274l.774-.258c.346-.115.617-.386.732-.732z"/></svg>');
+// Mix the theme's own background and foreground. Because brand injects different
+// $body-bg / $body-color into the light and dark compiles, body-mix(95%)
+// resolves to the correct per-mode surface from a single source of truth: a
+// hair off the page background, never Quarto's hard-coded grey.
+@function body-mix($weight) {
+  @return mix($body-bg, $body-color, $weight);
+}
 
 /*-- scss:mixins --*/
 
-// The shared shell for every control in the navbar's right-hand group: the
-// GitHub widget, the search button, and the colour-scheme toggle. Without one
-// definition they drift apart, which is what made the widget look wrong.
-// Every control in the navbar's right-hand group shares this shell: the GitHub
-// widget, the search button, and the colour-scheme toggle. The navbar is dark
-// in both schemes, so these colours are fixed against a dark surface rather
-// than following the page, which would turn them white-on-dark in light mode.
-@mixin pill-button {
+// Shared pill shell for the navbar-right control group (search button,
+// colour-scheme toggle, GitHub widget trigger) so they read as one set.
+@mixin navbar-tool-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--mn-nav-fill);
-  border: 1px solid var(--mn-nav-hairline);
-  border-radius: var(--mn-radius-sm);
-  color: var(--mn-nav-fg) !important;
-  cursor: pointer;
-  font-size: 0.85rem;
-  line-height: 1.4;
-  text-decoration: none;
-  transition: background 150ms var(--mn-ease), border-color 150ms var(--mn-ease),
-    color 150ms var(--mn-ease);
+  background: transparent;
+  border: 1px solid var(--mn-navbar-border);
+  border-radius: $border-radius-sm;
+  color: var(--mn-navbar-fg) !important;
+  cursor: pointer; // iOS needs this for a <div> to fire click
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
-@mixin pill-button-active {
-  background: var(--mn-nav-fill-active);
-  border-color: var(--mn-nav-accent);
-  color: var(--mn-nav-accent) !important;
-  text-decoration: none;
+@mixin navbar-tool-pill-active {
+  background: var(--mn-navbar-accent-soft);
+  border-color: var(--mn-navbar-accent);
+  color: var(--mn-navbar-accent) !important;
 }
 
 /*-- scss:rules --*/
 
-// Custom properties rather than SCSS variables, because the navbar and the
-// widget have to follow whichever colour scheme is active at the time, which
-// SCSS cannot know at compile time.
+// ===========================================================================
+// COLOUR TOKENS (per colour-scheme)
+// ===========================================================================
+// The page tokens follow the scheme via [data-bs-theme]. The navbar tokens do
+// not: the navbar and footer are `background: dark` in both schemes, so their
+// pills, the widget menu, and the tooltips must keep the dark surface whichever
+// way the page is set.
+
 :root {
-  --mn-radius-sm: 0.3rem;
-  --mn-radius-md: 0.5rem;
-  --mn-radius-lg: 0.875rem;
-  --mn-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+  --mn-accent: #0e6e7d;
+  --mn-accent-soft: rgb(14 110 125 / 0.12);
+  --mn-glow: rgb(14 110 125 / 0.4);
+  --mn-border: rgb(22 36 47 / 0.14);
+  --mn-surface: #ffffff;
+  --mn-muted: #4d6472;
+  --mn-tint: rgb(14 110 125 / 0.1);
+  --mn-title-grad: linear-gradient(92deg, #0b5560, #0e6e7d 55%, #1f8ea0);
 
-  // The navbar keeps the dark palette whichever scheme the page is in, so its
-  // controls get their own tokens rather than the page ones.
-  --mn-nav-fg: #{$foam};
-  --mn-nav-accent: #{$harbour-light};
-  --mn-nav-fill: rgb(255 255 255 / 0.06);
-  --mn-nav-fill-active: rgb(79 179 196 / 0.18);
-  --mn-nav-hairline: rgb(230 237 243 / 0.18);
+  // State colours, matching the terminal output.
+  --mn-success: #2f7d5c;
+  --mn-warning: #c2661b;
+  --mn-danger: #b23a2b;
+
+  // Navbar surface: identical in both compiled stylesheets.
+  --mn-navbar-bg: #0c1620;
+  --mn-navbar-fg: #e6edf3;
+  --mn-navbar-accent: #4fb3c4;
+  --mn-navbar-accent-soft: rgb(79 179 196 / 0.18);
+  --mn-navbar-border: rgb(230 237 243 / 0.16);
 }
 
-:root,
-[data-bs-theme="light"],
-.quarto-light {
-  --mn-paper: #{$mist};
-  --mn-surface: #{$surface-light};
-  --mn-ink: #{$ink};
-  --mn-muted: #{$muted-light};
-  --mn-primary: #{$harbour};
-  --mn-secondary: #{$rope};
-  --mn-warning: #{$lantern};
-  --mn-success: #{$moss};
-  --mn-danger: #{$signal};
-  --mn-hairline: rgb(22 36 47 / 0.12);
-  --mn-tint-primary: rgb(14 110 125 / 0.1);
-  --mn-shadow-soft: 0 2px 4px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.06);
+[data-bs-theme="dark"] {
+  color-scheme: dark;
+  --mn-accent: #4fb3c4;
+  --mn-accent-soft: rgb(79 179 196 / 0.16);
+  --mn-glow: rgb(79 179 196 / 0.5);
+  --mn-border: rgb(143 169 184 / 0.2);
+  --mn-surface: #132430;
+  --mn-muted: #93a9b7;
+  --mn-tint: rgb(79 179 196 / 0.14);
+  --mn-title-grad: linear-gradient(92deg, #4fb3c4, #8fd3de);
+
+  --mn-success: #5fbf92;
+  --mn-warning: #f0a555;
+  --mn-danger: #e8776a;
 }
 
-[data-bs-theme="dark"],
-.quarto-dark {
-  --mn-paper: #{$deep-water};
-  --mn-surface: #{$slack-water};
-  --mn-ink: #{$foam};
-  --mn-muted: #{$muted-dark};
-  --mn-primary: #{$harbour-light};
-  --mn-secondary: #{$rope-light};
-  --mn-warning: #{$lantern-light};
-  --mn-success: #{$moss-light};
-  --mn-danger: #{$signal-light};
-  --mn-hairline: rgb(143 169 184 / 0.2);
-  --mn-tint-primary: rgb(79 179 196 / 0.14);
-  --mn-shadow-soft: 0 2px 4px rgb(0 0 0 / 0.2), 0 8px 24px rgb(0 0 0 / 0.3);
+// ===========================================================================
+// BASE
+// ===========================================================================
+
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline: 2px solid var(--mn-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
-// --- Landing page. --------------------------------------------------------
-
-// The hero background bleeds to `100vw`, which is a hair wider than the content
-// area when a vertical scrollbar is present. `clip` keeps that overhang from
-// adding a horizontal scrollbar, and unlike `hidden` it does not turn the body
-// into a scroll container, so sticky navigation keeps working.
+// The hero background bleeds to 100vw, a hair wider than the content area when a
+// vertical scrollbar is present. `clip` absorbs the overhang without turning the
+// body into a scroll container, so sticky navigation keeps working.
 body {
   overflow-x: clip;
 }
+
+// ===========================================================================
+// TYPOGRAPHY
+// ===========================================================================
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  letter-spacing: 0.012em;
+}
+
+h1.title,
+header#title-block-header h1.title {
+  background: var(--mn-title-grad);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.02em;
+}
+
+// ===========================================================================
+// LINKS
+// ===========================================================================
+
+#quarto-document-content a:not(.btn):not(.nav-link):not(.no-external),
+.quarto-title-block a:not(.btn) {
+  text-decoration-color: var(--mn-accent-soft);
+  text-underline-offset: 0.18em;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+
+  &:hover {
+    text-decoration-color: var(--mn-accent);
+  }
+}
+
+// ===========================================================================
+// NAVBAR + FOOTER (the night palette in both schemes via background: dark)
+// ===========================================================================
+
+.navbar .navbar-brand,
+.navbar-title {
+  font-family: var(--bs-headings-font-family, inherit);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.navbar .nav-link {
+  position: relative;
+  transition: color 0.2s ease;
+}
+
+// An accent underline grows in on hover and stays for the active page.
+.navbar .nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.2rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--mn-navbar-accent), transparent);
+  transform: scaleX(0);
+  transition: transform 0.25s ease;
+}
+
+.navbar .nav-link:hover::after,
+.navbar .nav-link.active::after {
+  transform: scaleX(1);
+}
+
+// The footer keeps the dark palette in both schemes, matching the navbar, so
+// its links follow the light foreground rather than the page link colour.
+.nav-footer,
+.page-footer {
+  border-top: 1px solid var(--mn-navbar-border);
+  font-size: 0.9rem;
+
+  a {
+    color: var(--mn-navbar-fg);
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--mn-navbar-accent);
+      text-decoration: underline;
+    }
+  }
+}
+
+// ===========================================================================
+// NAVBAR TOOLS (search, colour-scheme toggle, GitHub widget)
+// ===========================================================================
+// The three controls share one pill shell so the navbar-right set reads as one
+// group. Ported from quarto-wizard, itself from posit-dev/great-docs.
+
+.navbar .navbar-nav.ms-auto {
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.navbar #quarto-search {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.4rem;
+}
+
+.navbar .quarto-navbar-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0.4rem;
+}
+
+.navbar #quarto-search .aa-DetachedSearchButton,
+.navbar .quarto-navbar-tools .quarto-color-scheme-toggle,
+.gh-widget-trigger {
+  @include navbar-tool-pill;
+}
+
+.gh-widget-trigger {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+// Icon-only tools are a fixed 2rem square; the search button ships its own
+// shadow, so drop it.
+.navbar #quarto-search .aa-DetachedSearchButton,
+.navbar .quarto-navbar-tools .quarto-color-scheme-toggle {
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  box-shadow: none;
+}
+
+.navbar #quarto-search .aa-DetachedSearchButton:hover,
+.navbar #quarto-search .aa-DetachedSearchButton:focus-visible,
+.navbar .quarto-navbar-tools .quarto-color-scheme-toggle:hover,
+.navbar .quarto-navbar-tools .quarto-color-scheme-toggle:focus-visible,
+.gh-widget-trigger:hover,
+.gh-widget-open .gh-widget-trigger {
+  @include navbar-tool-pill-active;
+}
+
+// Collapse the autocomplete library's icon slot to a ~1rem icon following
+// currentColor, and hide the placeholder and query slots so the detached button
+// stays an icon-only square. `#quarto-search` outranks the library's `.aa-*`.
+.navbar #quarto-search .aa-DetachedSearchButtonIcon {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  color: currentcolor;
+}
+
+.navbar #quarto-search .aa-DetachedSearchButtonIcon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.navbar #quarto-search .aa-DetachedSearchButtonPlaceholder,
+.navbar #quarto-search .aa-DetachedSearchButtonQuery {
+  display: none;
+}
+
+// --- GitHub widget internals. --------------------------------------------
+
+#github-widget {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.gh-icon {
+  flex-shrink: 0;
+}
+
+.gh-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gh-stat {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.gh-stat svg {
+  opacity: 0.85;
+}
+
+.gh-count {
+  min-width: 1rem;
+  text-align: center;
+}
+
+.gh-dropdown-arrow {
+  opacity: 0.7;
+  transition: transform 150ms ease;
+}
+
+.gh-widget-open .gh-dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+// The menu hangs off the dark navbar, so it is painted from the navbar tokens
+// rather than the page surface. Scoping under `.navbar` outranks Quarto's
+// `.navbar a` colour, which would otherwise force the navbar foreground onto
+// every item.
+.navbar .gh-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 14rem;
+  background: var(--mn-navbar-bg);
+  border: 1px solid var(--mn-navbar-border);
+  border-radius: $border-radius;
+  box-shadow: 0 12px 30px -16px var(--mn-glow);
+  padding: 0.35rem;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: opacity 150ms ease, transform 150ms ease, visibility 150ms ease;
+  z-index: 1000;
+}
+
+.navbar .gh-widget-open .gh-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.navbar .gh-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.4rem 0.7rem;
+  color: var(--mn-navbar-fg);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: $border-radius-sm;
+  transition: background 150ms ease, color 150ms ease;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--mn-navbar-accent-soft);
+    color: var(--mn-navbar-accent);
+    text-decoration: none;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+.navbar .gh-dropdown-divider {
+  height: 1px;
+  margin: 0.35rem 0;
+  background: var(--mn-navbar-border);
+}
+
+// Mobile fix (critical). The collapsed navbar-nav is a Bootstrap
+// `.navbar-nav-scroll` region (max-height + overflow-y: auto) that clips the
+// absolute dropdown, so it shows a scrollbar and looks like it will not open.
+// Neutralise it and anchor the menu to the left edge so it stays on screen.
+@media (max-width: 991.98px) {
+  .navbar .navbar-collapse .navbar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+
+    .nav-link {
+      width: auto;
+      padding-inline: 0.6rem;
+    }
+  }
+
+  .navbar .gh-dropdown {
+    left: 0;
+    right: auto;
+  }
+}
+
+// ===========================================================================
+// TOOLTIPS (navbar controls — dark surface in both schemes)
+// ===========================================================================
+
+.tooltip {
+  --bs-tooltip-bg: var(--mn-navbar-bg);
+  --bs-tooltip-color: var(--mn-navbar-fg);
+  --bs-tooltip-opacity: 1;
+  --bs-tooltip-border-radius: #{$border-radius-sm};
+}
+
+.tooltip .tooltip-inner {
+  border: 1px solid var(--mn-navbar-accent);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+// Tippy theme used by navbar-tooltips.html for the navbar controls.
+.tippy-box[data-theme~="mn"] {
+  background-color: var(--mn-navbar-bg);
+  color: var(--mn-navbar-fg);
+  border: 1px solid var(--mn-navbar-accent);
+  border-radius: $border-radius-sm;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.tippy-box[data-theme~="mn"] .tippy-content {
+  padding: 0.2rem 0.55rem;
+}
+
+// Skip link: visible only when focused.
+.skip-link:focus {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2000;
+  padding: 0.5rem 0.9rem;
+  border-radius: $border-radius-sm;
+  background-color: var(--mn-accent);
+  color: #f7f9fb;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+}
+
+// ===========================================================================
+// THEME TOGGLE (sun in light scheme, moon in dark scheme)
+// ===========================================================================
+// Quarto renders an empty <i class="bi">; the glyph is a mask-image so it
+// follows currentColor and picks up the pill's hover colour. Taken from
+// quarto-wizard.
+
+$icon-sun: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="black" viewBox="0 0 16 16"><path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>');
+$icon-moon: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="black" viewBox="0 0 16 16"><path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/><path d="M10.794 3.148a.217.217 0 0 1 .412 0l.387 1.162c.173.518.579.924 1.097 1.097l1.162.387a.217.217 0 0 1 0 .412l-1.162.387a1.73 1.73 0 0 0-1.097 1.097l-.387 1.162a.217.217 0 0 1-.412 0l-.387-1.162A1.73 1.73 0 0 0 9.31 6.593l-1.162-.387a.217.217 0 0 1 0-.412l1.162-.387a1.73 1.73 0 0 0 1.097-1.097zM13.863.099a.145.145 0 0 1 .274 0l.258.774c.115.346.386.617.732.732l.774.258a.145.145 0 0 1 0 .274l-.774.258a1.16 1.16 0 0 0-.732.732l-.258.774a.145.145 0 0 1-.274 0l-.258-.774a1.16 1.16 0 0 0-.732-.732l-.774-.258a.145.145 0 0 1 0-.274l.774-.258c.346-.115.617-.386.732-.732z"/></svg>');
+
+.quarto-color-scheme-toggle .bi::before {
+  content: "";
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  vertical-align: -0.125em;
+  background-image: none;
+  background-color: currentcolor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+
+// Quarto ships its own glyph at the same specificity, so scope to every place
+// the toggle can render in order to win on order.
+.navbar .quarto-color-scheme-toggle,
+.sidebar-navigation .quarto-color-scheme-toggle,
+.top-right.quarto-color-scheme-toggle {
+  &:not(.alternate) .bi::before {
+    mask-image: $icon-sun;
+    -webkit-mask-image: $icon-sun;
+  }
+
+  &.alternate .bi::before {
+    mask-image: $icon-moon;
+    -webkit-mask-image: $icon-moon;
+  }
+}
+
+// ===========================================================================
+// PANEL TABSET
+// ===========================================================================
+
+.panel-tabset .nav-tabs {
+  border-bottom: 1px solid var(--mn-border);
+  // Bootstrap bakes the active colour to near-black; override the variables so
+  // the tab keeps every other behaviour.
+  --bs-nav-tabs-link-active-color: var(--bs-body-color);
+  --bs-nav-tabs-link-active-bg: transparent;
+  --bs-nav-tabs-link-active-border-color: transparent;
+}
+
+.panel-tabset .nav-tabs .nav-link {
+  color: var(--bs-secondary-color);
+  transition: color 0.15s ease-in-out;
+}
+
+.panel-tabset .nav-tabs .nav-link:hover,
+.panel-tabset .nav-tabs .nav-link:focus {
+  color: var(--mn-accent);
+  border-color: transparent;
+}
+
+.panel-tabset .nav-tabs .nav-link.active {
+  color: var(--bs-body-color);
+  border-color: transparent;
+  border-bottom: 2px solid var(--mn-accent);
+  background: transparent;
+  font-weight: 600;
+}
+
+// ===========================================================================
+// CODE
+// ===========================================================================
+// Quarto bakes a fixed grey into div.sourceCode. The [data-bs-theme] prefix
+// (always on <html>) raises specificity so these win, and body-mix() derives
+// the surface from the live theme colours, correct in both schemes. Token
+// colours stay with the github-light / github-dark highlighting themes.
+
+[data-bs-theme] div.sourceCode,
+[data-bs-theme] pre:not(.sourceCode) {
+  background-color: body-mix(95%);
+  border: 1px solid body-mix(85%);
+  border-radius: $border-radius-sm;
+}
+
+[data-bs-theme] pre.sourceCode {
+  background-color: transparent;
+  border: none;
+}
+
+code:not(.sourceCode):not(pre code) {
+  color: var(--mn-accent);
+  background-color: var(--mn-accent-soft);
+  padding: 0.1em 0.35em;
+  border-radius: 0.3em;
+}
+
+.code-copy-button {
+  color: var(--mn-accent);
+}
+
+// Code Window extension: its style.css uses the CSS system colour `Canvas`,
+// which follows the OS scheme rather than the [data-bs-theme] toggle. Re-skin
+// the container and title bar with body-mix() so the block follows the page
+// scheme. A leading `div` keeps these authoritative over the extension's
+// class-only rules regardless of load order.
+div.code-with-filename {
+  background-color: body-mix(95%);
+  border-color: body-mix(85%);
+}
+
+div.code-with-filename .code-with-filename-file {
+  background-color: body-mix(90%);
+  border-bottom-color: body-mix(85%);
+}
+
+div.code-with-filename .code-with-filename-file pre {
+  color: rgba($body-color, 0.6);
+}
+
+div.code-with-filename div.sourceCode,
+div.code-with-filename pre.sourceCode {
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+}
+
+// ===========================================================================
+// CALLOUTS, CARDS, TABLES
+// ===========================================================================
+
+.card,
+.quarto-grid-item.card {
+  border: 1px solid var(--mn-border);
+  border-radius: $border-radius-lg;
+  background-color: body-mix(96%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px -16px var(--mn-glow);
+    border-color: var(--mn-accent);
+  }
+}
+
+.table {
+  --bs-table-border-color: var(--mn-border);
+}
+
+.table thead th {
+  border-bottom: 2px solid var(--mn-accent);
+  letter-spacing: 0.02em;
+  font-weight: 600;
+}
+
+// ===========================================================================
+// SIDEBAR + TOC
+// ===========================================================================
+
+#quarto-sidebar .sidebar-item-container .active,
+#quarto-sidebar .sidebar-item-container .sidebar-link:hover,
+#TOC .active {
+  color: var(--mn-accent);
+}
+
+#TOC .active {
+  border-left-color: var(--mn-accent);
+}
+
+#quarto-back-to-top {
+  border: 1px solid var(--mn-border);
+  box-shadow: 0 8px 24px -12px var(--mn-glow);
+}
+
+// ===========================================================================
+// BUTTONS
+// ===========================================================================
+
+.btn-primary,
+.btn-action {
+  box-shadow: 0 6px 20px -10px var(--mn-glow);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 26px -10px var(--mn-glow);
+  }
+}
+
+// ===========================================================================
+// LANDING PAGE (minato's own: harbour hero, state legend, feature cards)
+// ===========================================================================
 
 .hero {
   position: relative;
   padding: clamp(2.5rem, 8vw, 5rem) 0 clamp(1.5rem, 4vw, 2.5rem);
   margin-bottom: 2.5rem;
 
-  // The content stays in its column, but the tint and the rule beneath it
-  // reach the full width of the window. A pseudo-element carries the
-  // background so the text keeps its measure while the colour bleeds out.
+  // The content keeps its column while the tint bleeds to the window edges.
   &::before {
     content: "";
     position: absolute;
     z-index: -1;
     inset-block: 0;
-    // A 100vw box centred on the hero, so the tint reaches both window edges
-    // while the content keeps its column.
     left: 50%;
     width: 100vw;
     transform: translateX(-50%);
-    background: linear-gradient(180deg, var(--mn-tint-primary) 0%, transparent 100%);
-    border-bottom: 1px solid var(--mn-hairline);
+    background: linear-gradient(180deg, var(--mn-tint) 0%, transparent 100%);
+    border-bottom: 1px solid var(--mn-border);
   }
 }
 
@@ -182,7 +688,7 @@ body {
   .lead {
     display: block;
     font-size: clamp(1.05rem, 2.4vw, 1.3rem);
-    color: var(--mn-primary);
+    color: var(--mn-accent);
     font-weight: 500;
     margin-bottom: 1.25rem;
   }
@@ -235,7 +741,7 @@ body {
   }
 
   &.state-uncloned {
-    color: var(--mn-primary);
+    color: var(--mn-accent);
   }
 }
 
@@ -248,15 +754,15 @@ body {
 
 .card-item {
   padding: 1.25rem 1.35rem;
-  border: 1px solid var(--mn-hairline);
-  border-radius: var(--mn-radius-lg);
+  border: 1px solid var(--mn-border);
+  border-radius: $border-radius-lg;
   background: var(--mn-surface);
-  transition: border-color 150ms var(--mn-ease), box-shadow 150ms var(--mn-ease);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 
   h3 {
     font-size: 1.05rem;
     margin: 0 0 0.5rem;
-    color: var(--mn-primary);
+    color: var(--mn-accent);
   }
 
   p {
@@ -266,402 +772,33 @@ body {
   }
 
   &:hover {
-    border-color: var(--mn-primary);
-    box-shadow: var(--mn-shadow-soft);
+    transform: translateY(-3px);
+    border-color: var(--mn-accent);
+    box-shadow: 0 12px 30px -16px var(--mn-glow);
   }
 }
 
-// --- Navbar and its right-hand controls. ----------------------------------
+// ===========================================================================
+// MOTION + PRINT GUARDS
+// ===========================================================================
 
-.navbar-title,
-.navbar-brand {
-  font-family: $headings-font-family;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-// Give the collapse room so `space-between` cannot open a gap before the
-// tools, then use one spacing everywhere in the group.
-.navbar .navbar-collapse {
-  flex-grow: 1;
-}
-
-.navbar .quarto-navbar-tools {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-left: 0.4rem;
-}
-
-.navbar .navbar-nav.ms-auto > .nav-item > .nav-link,
-.gh-widget-trigger,
-.navbar #quarto-search .aa-DetachedSearchButton,
-.navbar .quarto-navbar-tools .quarto-color-scheme-toggle {
-  @include pill-button;
-}
-
-.navbar .navbar-nav.ms-auto > .nav-item > .nav-link,
-.gh-widget-trigger {
-  padding: 0.3rem 0.6rem;
-}
-
-.navbar #quarto-search .aa-DetachedSearchButton,
-.navbar .quarto-navbar-tools .quarto-color-scheme-toggle {
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
-  box-shadow: none;
-}
-
-.navbar .navbar-nav.ms-auto > .nav-item > .nav-link:hover,
-.navbar .navbar-nav.ms-auto > .nav-item.show > .nav-link,
-.gh-widget-trigger:hover,
-.gh-widget-open .gh-widget-trigger,
-.navbar #quarto-search .aa-DetachedSearchButton:hover,
-.navbar #quarto-search .aa-DetachedSearchButton:focus-visible,
-.navbar .quarto-navbar-tools .quarto-color-scheme-toggle:hover,
-.navbar .quarto-navbar-tools .quarto-color-scheme-toggle:focus-visible {
-  @include pill-button-active;
-}
-
-// The search button ships its own glyph and shadow; strip the shadow so it
-// sits flush with the other pills, and let the icon follow the shared colour.
-.navbar #quarto-search .aa-DetachedSearchButton {
-  .aa-SubmitIcon,
-  svg {
-    color: currentcolor;
-    fill: currentcolor;
-  }
-
-  .aa-DetachedSearchButtonPlaceholder,
-  .aa-DetachedSearchButtonQuery {
-    display: none;
+@media (prefers-reduced-motion: reduce) {
+  .navbar .nav-link::after,
+  .gh-widget-trigger,
+  .gh-dropdown-arrow,
+  .gh-dropdown,
+  .gh-dropdown-item,
+  .card,
+  .card-item,
+  .btn-primary {
+    transition: none;
   }
 }
 
-// Colour-scheme toggle. Quarto renders an empty glyph element, so the sun and
-// moon are painted as masks, which makes them follow the pill's colour on
-// hover as well as at rest.
-.quarto-color-scheme-toggle {
-  text-decoration: none;
-
-  .bi {
-    display: inline-flex;
-    line-height: 1;
-  }
-
-  .bi::before {
-    content: "";
-    display: inline-block;
-    width: 1rem;
-    height: 1rem;
-    vertical-align: -0.125em;
-    background-image: none;
-    background-color: currentcolor;
-    mask-size: contain;
-    mask-repeat: no-repeat;
-    mask-position: center;
-    -webkit-mask-size: contain;
-    -webkit-mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-  }
-
-}
-
-// Quarto ships its own toggle glyph at the same specificity, so these are
-// scoped to every place the toggle can be rendered in order to win, which is
-// what gribouille does for the same reason.
-.navbar .quarto-color-scheme-toggle,
-.sidebar-navigation .quarto-color-scheme-toggle,
-.top-right.quarto-color-scheme-toggle {
-  &:not(.alternate) .bi::before {
-    background-image: none;
-    background-color: currentcolor;
-    mask-image: $icon-sun;
-    -webkit-mask-image: $icon-sun;
-  }
-
-  &.alternate .bi::before {
-    background-image: none;
-    background-color: currentcolor;
-    mask-image: $icon-moon;
-    -webkit-mask-image: $icon-moon;
-  }
-}
-
-// --- GitHub widget. -------------------------------------------------------
-// assets/scripts/github-widget.html replaces the `#github-widget` placeholder
-// with a button showing star and fork counts and a repository menu. Ported
-// from gribouille, which took it from posit-dev/great-docs.
-
-#github-widget {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-.gh-icon {
-  flex-shrink: 0;
-}
-
-.gh-stats {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.gh-stat {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-.gh-stat svg {
-  opacity: 0.85;
-}
-
-.gh-count {
-  min-width: 1rem;
-  text-align: center;
-}
-
-.gh-dropdown-arrow {
-  opacity: 0.7;
-  transition: transform 150ms var(--mn-ease);
-}
-
-.gh-widget-open .gh-dropdown-arrow {
-  transform: rotate(180deg);
-}
-
-// The trigger sits on the navbar, but the menu it opens hangs over the page,
-// so the menu follows the page palette rather than the navbar one.
-
-.gh-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 12rem;
-  background: var(--mn-paper);
-  border: 1px solid var(--mn-hairline);
-  border-radius: var(--mn-radius-md);
-  box-shadow: var(--mn-shadow-soft);
-  padding: 0.35rem;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-8px);
-  transition: opacity 150ms var(--mn-ease), transform 150ms var(--mn-ease),
-    visibility 150ms var(--mn-ease);
-  z-index: 1000;
-}
-
-.gh-widget-open .gh-dropdown {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-
-.gh-dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0.4rem 0.7rem;
-  color: var(--mn-ink);
-  text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 500;
-  border-radius: var(--mn-radius-sm);
-  transition: background 150ms var(--mn-ease), color 150ms var(--mn-ease);
-
-  &:hover,
-  &:focus-visible {
-    background: var(--mn-tint-primary);
-    color: var(--mn-primary);
-    text-decoration: none;
-  }
-
-  svg,
-  iconify-icon {
-    flex-shrink: 0;
-  }
-}
-
-.gh-dropdown-divider {
-  height: 1px;
-  margin: 0.35rem 0;
-  background: var(--mn-hairline);
-}
-
-// --- Tabsets. -------------------------------------------------------------
-// Bootstrap bakes the active tab colour to near-black, which disappears on a
-// dark background. Override the variables rather than the rule, so the tab
-// keeps every other Bootstrap behaviour.
-
-.panel-tabset .nav-tabs {
-  border-bottom: 1px solid var(--mn-hairline);
-  --bs-nav-tabs-link-active-color: var(--mn-ink);
-  --bs-nav-tabs-link-active-bg: transparent;
-  --bs-nav-tabs-link-active-border-color: transparent;
-
-  .nav-link {
-    color: var(--mn-muted);
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: var(--mn-radius-sm) var(--mn-radius-sm) 0 0;
-    font-family: $font-family-sans-serif;
-    transition: color 150ms var(--mn-ease), border-color 150ms var(--mn-ease);
-
-    &:hover,
-    &:focus-visible {
-      color: var(--mn-primary);
-      border-color: transparent;
-    }
-
-    &.active {
-      color: var(--mn-ink);
-      background: transparent;
-      border-color: transparent;
-      border-bottom: 2px solid var(--mn-primary);
-      font-weight: 600;
-    }
-  }
-}
-
-// --- Code. ----------------------------------------------------------------
-// Pandoc's highlighting themes hard-code a background on the .sourceCode
-// wrapper, and Bootstrap sets --bs-code-color on inline code, so the surface
-// needs !important to win. Token colours are left to Quarto's own
-// --quarto-hl-* variables, which is what makes the light and dark
-// highlighting themes work.
-
-div.sourceCode,
-pre.sourceCode,
-pre > code.sourceCode,
-pre.sourceCode > code,
-.cell-output,
-.cell-output pre {
-  background: var(--mn-surface) !important;
-  color: var(--mn-ink);
-  font-family: $font-family-monospace;
-  font-size: 0.88em;
-  line-height: 1.55;
-}
-
-pre {
-  background: var(--mn-surface);
-  color: var(--mn-ink);
-  border: 1px solid var(--mn-hairline);
-  border-radius: var(--mn-radius-md);
-  font-family: $font-family-monospace;
-  font-size: 0.88em;
-  line-height: 1.55;
-  padding: 0.9rem 1rem;
-}
-
-// The wrapper carries the frame; the inner pre drops its own so there is no
-// double box.
-div.sourceCode {
-  border: 1px solid var(--mn-hairline);
-  border-radius: var(--mn-radius-md);
-  margin: 1rem 0;
-
-  > pre,
-  > pre.sourceCode {
-    border: 0;
-    border-radius: 0;
-    margin: 0;
-  }
-}
-
-// Tokens bring their own colour; clear anything inherited behind them.
-pre code.sourceCode,
-pre code.sourceCode span {
-  background: transparent !important;
-}
-
-.cell-output,
-.cell-output pre {
-  border: 1px solid var(--mn-hairline);
-  border-radius: var(--mn-radius-md);
-  color: var(--mn-muted);
-}
-
-// The filename bar sits on top of the block.
-.code-with-filename .code-with-filename-file {
-  background: var(--mn-surface) !important;
-  color: var(--mn-muted);
-  border: 1px solid var(--mn-hairline);
-  border-bottom: 0;
-  border-radius: var(--mn-radius-md) var(--mn-radius-md) 0 0;
-  font-family: $font-family-monospace;
-  font-size: 0.82em;
-  padding: 0.4rem 0.9rem;
-
-  pre {
-    background: transparent !important;
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-}
-
-.code-with-filename-file::after {
-  width: 0 !important;
-}
-
-.code-with-filename div.sourceCode {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  margin-top: 0;
-}
-
-// Inline code only. Restricted to true inline contexts so tokens inside a
-// block are untouched, and !important because Pandoc tints table cells.
-:not(pre) > code {
-  --bs-code-color: var(--mn-primary);
-  background: var(--mn-surface) !important;
-  color: var(--mn-primary) !important;
-  border: 1px solid var(--mn-hairline);
-  border-radius: var(--mn-radius-sm);
-  padding: 0.1rem 0.35rem;
-  font-size: 0.88em;
-}
-
-// --- Tables. --------------------------------------------------------------
-
-table {
-  font-size: 0.94rem;
-
-  thead th {
-    font-family: $headings-font-family;
-    font-weight: 600;
-    border-bottom: 2px solid var(--mn-hairline);
-  }
-}
-
-.table > :not(caption) > * > * {
-  padding: 0.6rem 0.75rem;
-}
-
-// The footer keeps the dark palette in both schemes, matching the navbar, so
-// its links follow the light-on-dark foreground rather than the page link
-// colour, which would be unreadable on it.
-.nav-footer,
-.page-footer {
-  border-top: 1px solid var(--mn-nav-hairline);
-  font-size: 0.9rem;
-
-  a {
-    color: var(--mn-nav-fg);
-    text-decoration: none;
-
-    &:hover,
-    &:focus-visible {
-      color: var(--mn-nav-accent);
-      text-decoration: underline;
-    }
+@media print {
+  h1.title,
+  header#title-block-header h1.title {
+    -webkit-text-fill-color: currentcolor;
+    background: none;
   }
 }
