@@ -56,18 +56,6 @@ website:
     right: |
       Licence: [MIT](https://github.com/mcanouil/minato?tab=MIT-1-ov-file#readme).
 
-filters:
-  - at: pre-quarto
-    path: code-window
-
-extensions:
-  code-window:
-    style: "macos"
-    # Blocks here are either a command to run or the output it produced, and
-    # both are labelled explicitly, so a language-derived label would only add
-    # noise.
-    auto-filename: false
-
 brand: _brand.yml
 
 format:
@@ -100,3 +88,15 @@ format:
       - assets/scripts/a11y-fixes.html
       - assets/scripts/navbar-tooltips.html
       - assets/scripts/github-widget.html
+
+filters:
+  - at: pre-quarto
+    path: code-window
+
+extensions:
+  code-window:
+    style: "macos"
+    # Blocks here are either a command to run or the output it produced, and
+    # both are labelled explicitly, so a language-derived label would only add
+    # noise.
+    auto-filename: false
