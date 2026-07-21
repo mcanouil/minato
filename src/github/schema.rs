@@ -257,13 +257,24 @@ pub fn comparison_query(forks: &[ForkComparison]) -> String {
         let _ = writeln!(
             query,
             "  f{index}: repository(owner: \"{}\", name: \"{}\") {{ defaultBranchRef {{ compare(headRef: \"{}\") {{ aheadBy behindBy }} }} }}",
-            fork.id.owner, fork.id.name, fork.head_ref
+            escape(&fork.id.owner),
+            escape(&fork.id.name),
+            escape(&fork.head_ref)
         );
     }
 
     query.push_str("}\n");
 
     query
+}
+
+/// Escapes a value for embedding in a GraphQL double-quoted string.
+///
+/// A branch name may contain a quote or a backslash, both legal in a git ref
+/// and both able to break out of the string literal, so they are escaped rather
+/// than trusted.
+fn escape(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// One comparison result, keyed by the alias it was requested under.
@@ -330,5 +341,25 @@ impl From<RepositoryNode> for RemoteRepo {
                 licence: node.license_info.and_then(|license| license.spdx_id),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn comparison_query_escapes_quotes_so_a_ref_cannot_break_it() {
+        let forks = vec![ForkComparison {
+            id: RepoId::new(Provider::GitHub, "owner", "repo"),
+            head_ref: "up:weird\"branch".to_owned(),
+        }];
+
+        let query = comparison_query(&forks);
+
+        assert!(
+            query.contains("up:weird\\\"branch"),
+            "a quote in an interpolated value must be escaped, got: {query}"
+        );
     }
 }
