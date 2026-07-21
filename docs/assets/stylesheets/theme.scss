@@ -622,6 +622,22 @@ table {
   padding: 0.6rem 0.75rem;
 }
 
-.footer {
+// The footer keeps the dark palette in both schemes, matching the navbar, so
+// its links follow the light-on-dark foreground rather than the page link
+// colour, which would be unreadable on it.
+.nav-footer,
+.page-footer {
+  border-top: 1px solid var(--mn-nav-hairline);
   font-size: 0.9rem;
+
+  a {
+    color: var(--mn-nav-fg);
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--mn-nav-accent);
+      text-decoration: underline;
+    }
+  }
 }
