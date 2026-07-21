@@ -3,6 +3,8 @@ project:
   output-dir: _site
   resources:
     - assets/scripts/
+    # Published verbatim so `curl -fsSL .../install.sh | bash` works.
+    - install.sh
 
 lang: en-GB
 date-format: "dddd[, the] Do [of] MMMM, YYYY"

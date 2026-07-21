@@ -7,6 +7,16 @@ subtitle: "Install it, point it at your accounts, and see what has drifted."
 
 ::: {.panel-tabset}
 
+### Quick install (script)
+
+```{.bash filename="Terminal"}
+curl -fsSL https://m.canouil.dev/minato/install.sh | bash
+```
+
+The script detects your platform, verifies the download against the release `SHA256SUMS`, and installs into `/usr/local/bin` when writable, otherwise `~/.local/bin`.
+Set `MINATO_VERSION` to pin a release, `MINATO_INSTALL_DIR` to choose where it lands, or `MINATO_SKIP_CHECKSUM=1` to bypass verification.
+It needs `bash` and `curl`; on Windows, use the `.zip` from the releases page instead.
+
 ### With cargo
 
 ```{.bash filename="Terminal"}
@@ -15,11 +25,11 @@ cargo install --git https://github.com/mcanouil/minato --tag <version>
 
 ### From a released binary
 
-Every [release](https://github.com/mcanouil/minato/releases) carries an archive for macOS on Apple silicon and Intel, Linux on x86-64 and ARM64, and Windows.
+Every [release](https://github.com/mcanouil/minato/releases) carries an archive for macOS on Apple silicon and Intel, Linux on x86-64 and ARM64, and Windows, each holding the binary alone.
 
 ```{.bash filename="Terminal"}
 tar -xzf minato-<version>-<target>.tar.gz
-sudo install minato-<version>-<target>/minato /usr/local/bin/minato
+sudo install minato /usr/local/bin/minato
 ```
 
 On Windows, unzip the archive and put `minato.exe` somewhere on `PATH`.

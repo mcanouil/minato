@@ -187,6 +187,12 @@ jobs:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      # Attesting build provenance needs an OIDC token and write access to the
+      # attestations store, so anyone can later verify where a binary came from.
+      id-token: write
+      attestations: write
 
     steps:
       # Build the bump commit rather than the triggering ref, which still
@@ -213,29 +219,31 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
+          mkdir -p release_assets
           NAME="minato-${VERSION}-${TARGET}"
-          mkdir -p "dist/${NAME}"
 
+          # The archive holds the binary alone, at its root, so the installer can
+          # extract straight to a directory on PATH. The README, licence, and
+          # changelog live on the release page and in the repository.
           if [ "${RUNNER_OS}" = "Windows" ]; then
-            cp "target/${TARGET}/release/minato.exe" "dist/${NAME}/"
+            (cd "target/${TARGET}/release" && 7z a "${GITHUB_WORKSPACE}/release_assets/${NAME}.zip" minato.exe >/dev/null)
           else
-            cp "target/${TARGET}/release/minato" "dist/${NAME}/"
+            tar --create --gzip --file "release_assets/${NAME}.tar.gz" -C "target/${TARGET}/release" minato
           fi
-          cp README.md LICENSE CHANGELOG.md "dist/${NAME}/"
 
-          cd dist
-          if [ "${RUNNER_OS}" = "Windows" ]; then
-            7z a "${NAME}.zip" "${NAME}" >/dev/null
-          else
-            tar --create --gzip --file "${NAME}.tar.gz" "${NAME}"
-          fi
+      # Lets anyone run `gh attestation verify` and learn which workflow and
+      # which commit produced the archive in front of them.
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            release_assets/*.tar.gz
+            release_assets/*.zip
 
       - uses: actions/upload-artifact@v7
         with:
           name: minato-${{ matrix.target }}
-          path: |
-            dist/*.tar.gz
-            dist/*.zip
+          path: release_assets/*
           if-no-files-found: error
 
   github-release:
@@ -267,6 +275,14 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Compute checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Bare filenames, so the installer can match a downloaded asset by name.
+          (cd dist && sha256sum minato-*.tar.gz minato-*.zip > SHA256SUMS)
+          cat dist/SHA256SUMS
+
       - name: Assemble the release notes
         shell: bash
         run: |
@@ -285,46 +301,10 @@ jobs:
             exit 1
           fi
 
-          # Every release says how to install it, so the assets below are not
-          # left to be interpreted.
-          {
-            echo "## Install"
-            echo
-            echo "### With cargo"
-            echo
-            echo '```sh'
-            echo "cargo install --git https://github.com/mcanouil/minato --tag ${VERSION}"
-            echo '```'
-            echo
-            echo "### From a released binary"
-            echo
-            echo "Download the archive for your platform below, then:"
-            echo
-            echo '```sh'
-            echo "tar -xzf minato-${VERSION}-<target>.tar.gz"
-            echo "sudo install minato-${VERSION}-<target>/minato /usr/local/bin/minato"
-            echo '```'
-            echo
-            echo "On Windows, unzip the archive and put \`minato.exe\` somewhere on \`PATH\`."
-            echo
-            echo "| Platform | Archive |"
-            echo "| --- | --- |"
-            echo "| macOS, Apple silicon | \`minato-${VERSION}-aarch64-apple-darwin.tar.gz\` |"
-            echo "| macOS, Intel | \`minato-${VERSION}-x86_64-apple-darwin.tar.gz\` |"
-            echo "| Linux, x86-64 | \`minato-${VERSION}-x86_64-unknown-linux-gnu.tar.gz\` |"
-            echo "| Linux, ARM64 | \`minato-${VERSION}-aarch64-unknown-linux-gnu.tar.gz\` |"
-            echo "| Windows, x86-64 | \`minato-${VERSION}-x86_64-pc-windows-msvc.zip\` |"
-            echo
-            echo "### From source"
-            echo
-            echo '```sh'
-            echo "git clone https://github.com/mcanouil/minato && cd minato"
-            echo "cargo install --path ."
-            echo '```'
-            echo
-            echo "## What changed"
-            echo
-          } > notes.md
+          # The install instructions live in a committed template, so the
+          # release body and the site stay in step. It ends with the "## Changes"
+          # heading, under which the changelog section is appended.
+          sed "s/%%VERSION%%/${VERSION}/g" .github/release-notes.md > notes.md
           cat changes.md >> notes.md
 
       - name: Create the GitHub release
@@ -338,7 +318,7 @@ jobs:
             --target "${{ needs.bump-version.outputs.commit_sha }}" \
             --title "${VERSION}" \
             --notes-file notes.md \
-            dist/*.tar.gz dist/*.zip
+            dist/*.tar.gz dist/*.zip dist/SHA256SUMS
           echo "url=$(gh release view "${VERSION}" --json url --jq .url)" >> "${GITHUB_OUTPUT}"
 
       - name: Summary
