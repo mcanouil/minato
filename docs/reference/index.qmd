@@ -37,6 +37,10 @@ Add `--include-forks` or `--include-external` to bring either back.
 | `incomparable` | A clone that cannot be compared, such as one with no commits or a detached head. |
 | `drifted` | Anything that is not in sync, which is usually what wants attention. |
 
+Only working clones are compared.
+A bare repository or mirror has no working tree, so `status` reports it and moves on rather than treating it as a clone.
+A symlinked directory is not followed, and is reported the same way, so a projects tree kept behind a symlink is not silently missing.
+
 ## Reading
 
 ### `minato list`

@@ -142,6 +142,16 @@ pub fn is_repository(path: &Path) -> bool {
     path.join(".git").exists()
 }
 
+/// Whether `path` is a bare repository, a git directory with no working tree.
+///
+/// A bare repository holds `HEAD`, `objects`, and `refs` at its root rather
+/// than inside a `.git` directory. Recognising it by those entries avoids
+/// running git for every directory the walk visits.
+#[must_use]
+pub fn is_bare_repository(path: &Path) -> bool {
+    path.join("HEAD").is_file() && path.join("objects").is_dir() && path.join("refs").is_dir()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -785,6 +785,14 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
         );
     }
 
+    for bare in &scanned.skipped_bare {
+        let _ = write!(
+            out,
+            "\nThe bare repository {} has no working tree, so it is not compared as a clone.",
+            bare.display()
+        );
+    }
+
     Ok(out)
 }
 

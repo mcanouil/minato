@@ -249,6 +249,14 @@ pub struct Scan {
     /// circles. Reporting the links it skipped means a projects tree kept
     /// behind one is explained rather than silently missing.
     pub skipped_symlinks: Vec<PathBuf>,
+
+    /// Bare repositories that were recognised but not treated as clones, in a
+    /// stable order.
+    ///
+    /// A bare repository has no working tree, so it has nothing to be dirty or
+    /// ahead of. `minato` compares working clones, so a bare mirror is reported
+    /// rather than silently missing, without being mistaken for one.
+    pub skipped_bare: Vec<PathBuf>,
 }
 
 /// Finds every clone under `roots` and reads its state.
@@ -260,11 +268,18 @@ pub fn scan(roots: &ResolvedRoots, max_depth: usize) -> Scan {
     let mut directories: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut failures = Vec::new();
     let mut skipped_symlinks = Vec::new();
+    let mut skipped_bare = Vec::new();
 
     for root in roots.iter() {
         let mut found = Vec::new();
 
-        if let Err(failure) = collect(root, max_depth, &mut found, &mut skipped_symlinks) {
+        if let Err(failure) = collect(
+            root,
+            max_depth,
+            &mut found,
+            &mut skipped_symlinks,
+            &mut skipped_bare,
+        ) {
             failures.push(failure);
         }
 
@@ -277,6 +292,9 @@ pub fn scan(roots: &ResolvedRoots, max_depth: usize) -> Scan {
     skipped_symlinks.sort();
     skipped_symlinks.dedup();
 
+    skipped_bare.sort();
+    skipped_bare.dedup();
+
     let mut repositories: Vec<_> = directories
         .par_iter()
         .filter_map(|(directory, root)| read_within(directory, Some(root)).ok())
@@ -288,6 +306,7 @@ pub fn scan(roots: &ResolvedRoots, max_depth: usize) -> Scan {
         repositories,
         failures,
         skipped_symlinks,
+        skipped_bare,
     }
 }
 
@@ -297,12 +316,21 @@ fn collect(
     remaining_depth: usize,
     found: &mut Vec<PathBuf>,
     skipped_symlinks: &mut Vec<PathBuf>,
+    skipped_bare: &mut Vec<PathBuf>,
 ) -> Result<(), ScanError> {
     if git::is_repository(directory) {
         found.push(directory.to_owned());
 
         // A clone's own contents are not searched: nested repositories are
         // submodules or vendored copies, not separate checkouts to manage.
+        return Ok(());
+    }
+
+    if git::is_bare_repository(directory) {
+        // A bare repository has no working tree to compare, so it is reported
+        // rather than treated as a clone, and its object store is not walked
+        // into.
+        skipped_bare.push(directory.to_owned());
         return Ok(());
     }
 
@@ -342,7 +370,13 @@ fn collect(
         if kind.is_dir() {
             // A directory that cannot be read is skipped rather than failing
             // the whole scan; only an unreadable root is worth reporting.
-            let _ = collect(&path, remaining_depth - 1, found, skipped_symlinks);
+            let _ = collect(
+                &path,
+                remaining_depth - 1,
+                found,
+                skipped_symlinks,
+                skipped_bare,
+            );
         }
     }
 

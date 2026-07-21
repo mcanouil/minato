@@ -467,3 +467,26 @@ fn reports_a_symlinked_directory_rather_than_following_it() {
         "the skipped link is reported so the clone behind it is not silently missing"
     );
 }
+
+#[test]
+fn reports_a_bare_repository_rather_than_treating_it_as_a_clone() {
+    let root = tempfile::tempdir().expect("a temporary directory");
+    let bare = root.path().join("mirror.git");
+    std::fs::create_dir_all(&bare).expect("the directory");
+    git(&bare, &["init", "--bare", "--quiet"]);
+
+    let found = scan::scan(
+        &roots(vec![root.path().to_owned()]),
+        scan::DEFAULT_MAX_DEPTH,
+    );
+
+    assert!(
+        found.repositories.is_empty(),
+        "a bare repository has no working tree, so it is not a clone to compare"
+    );
+    assert_eq!(
+        found.skipped_bare,
+        vec![bare],
+        "the bare repository is reported rather than silently ignored"
+    );
+}
