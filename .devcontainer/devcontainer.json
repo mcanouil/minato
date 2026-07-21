@@ -5,7 +5,6 @@
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "mounts": [
-    "source=${localEnv:HOME}/Projects,target=/host/Projects,type=bind,readonly",
     "source=${localEnv:HOME}/.kata,target=/home/vscode/.kata,type=bind"
   ],
   "remoteEnv": {

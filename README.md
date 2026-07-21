@@ -162,8 +162,9 @@ export MINATO_GITHUB_TOKEN=$(gh auth token)
 devcontainer up --workspace-folder .
 ```
 
-`~/Projects` is mounted read-only at `/host/Projects`, so a run inside can see real clones and cannot alter them.
-That also means anything writing to a clone, `git fetch` included, cannot run against that mount.
+No host clones are mounted.
+The integration tests, and any manual run inside, use disposable git repositories created in a temporary directory, so `git fetch` and the ahead, behind, and sync paths can be exercised.
+The read-only guarantee lives where the design note puts it, in the action layer: an update is only ever a fast-forward, and `--dry-run` rehearses first.
 
 CI runs these same three commands, with tests on Linux, macOS, and Windows.
 Lint levels live in `Cargo.toml` under `[lints]`, so a local run and a CI run agree; there are no extra lint flags in the workflow.
