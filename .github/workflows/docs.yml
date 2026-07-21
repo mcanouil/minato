@@ -4,7 +4,8 @@ name: Documentation check
 # checks that a change still renders, before it reaches main.
 on:
   pull_request:
-    paths: ["docs/**", ".github/workflows/docs.yml"]
+    # CHANGELOG.md is part of the site through docs/changelog.qmd.
+    paths: ["docs/**", "CHANGELOG.md", ".github/workflows/docs.yml"]
 
 permissions:
   contents: read
