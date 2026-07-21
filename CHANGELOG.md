@@ -24,3 +24,4 @@ All notable changes to this project will be documented in this file.
 - fix: report symlinked directories the scan does not follow, so a projects tree kept behind a symlink is explained rather than showing an empty result (#32).
 - fix: recognise a bare repository or mirror and report it rather than silently ignoring it, since it has no working tree to compare as a clone (#33).
 - fix: skip a clone with no `origin` remote when fetching rather than attempting it, so one never-published clone no longer fails the whole `fetch` (#39).
+- fix: escape quotes and backslashes when building the fork-comparison GraphQL query, so an unusual branch name cannot corrupt the request (#40).
