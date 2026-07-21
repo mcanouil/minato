@@ -119,6 +119,14 @@ minato update                     # do it
 `update` fast-forwards only what is strictly behind and has no modified tracked files.
 Everything else is reported with the reason.
 
+```{.bash filename="Terminal"}
+minato sync-fork --dry-run        # see which forks would sync with upstream
+minato sync-fork                  # fast-forward each behind fork on GitHub
+```
+
+`sync-fork` uses GitHub's merge-upstream, so it fast-forwards a fork only when it is strictly behind its upstream.
+A fork holding its own commits is reported and left alone rather than merged.
+
 ## Browse it instead
 
 ```{.bash filename="Terminal"}

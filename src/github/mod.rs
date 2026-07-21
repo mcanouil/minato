@@ -12,7 +12,7 @@ use std::time::Duration;
 use jiff::Timestamp;
 use serde::Serialize;
 
-use crate::model::{RemoteRepo, UpstreamStanding};
+use crate::model::{RemoteRepo, RepoId, UpstreamStanding};
 
 pub use auth::{Token, TokenSource};
 
@@ -20,6 +20,9 @@ use schema::{RepositoriesData, Response};
 
 /// Where the GraphQL API lives.
 const DEFAULT_ENDPOINT: &str = "https://api.github.com/graphql";
+
+/// Where the REST API lives, used for the endpoints GraphQL does not cover.
+const DEFAULT_REST_ENDPOINT: &str = "https://api.github.com";
 
 /// How many forks to compare in one request.
 ///
@@ -221,6 +224,15 @@ pub enum GitHubError {
         source: reqwest::Error,
     },
 
+    /// A fork could not be synced with its upstream.
+    #[error("cannot sync `{repo}` with its upstream: {message}")]
+    SyncFailed {
+        /// The fork that could not be synced.
+        repo: String,
+        /// Why GitHub refused the sync.
+        message: String,
+    },
+
     /// The client could not be constructed.
     #[error("cannot build an HTTP client for GitHub: {source}")]
     Client {
@@ -228,6 +240,19 @@ pub enum GitHubError {
         #[source]
         source: reqwest::Error,
     },
+}
+
+/// A human reason for a refused merge-upstream, by status.
+fn sync_failure_message(status: reqwest::StatusCode) -> String {
+    match status {
+        reqwest::StatusCode::CONFLICT => {
+            "the fork has diverged from its upstream, so it cannot be fast-forwarded".to_owned()
+        }
+        reqwest::StatusCode::UNPROCESSABLE_ENTITY => {
+            "GitHub could not fast-forward the branch".to_owned()
+        }
+        other => format!("GitHub returned {other}"),
+    }
 }
 
 fn source_note(source: Option<TokenSource>) -> String {
@@ -250,6 +275,7 @@ struct Request<'a> {
 pub struct GitHubClient {
     http: reqwest::Client,
     endpoint: String,
+    rest_endpoint: String,
     token: Token,
     token_source: Option<TokenSource>,
     retry: RetryPolicy,
@@ -262,10 +288,18 @@ impl GitHubClient {
     ///
     /// Returns an error when the underlying HTTP client cannot be built.
     pub fn new(token: Token, token_source: Option<TokenSource>) -> Result<Self, GitHubError> {
-        Self::with_endpoint(token, token_source, DEFAULT_ENDPOINT)
+        Self::build(
+            token,
+            token_source,
+            DEFAULT_ENDPOINT.to_owned(),
+            DEFAULT_REST_ENDPOINT.to_owned(),
+        )
     }
 
     /// Builds a client against a specific endpoint.
+    ///
+    /// The one endpoint serves both APIs, since a mock server answers the
+    /// GraphQL and REST paths alike.
     ///
     /// # Errors
     ///
@@ -275,6 +309,16 @@ impl GitHubClient {
         token_source: Option<TokenSource>,
         endpoint: impl Into<String>,
     ) -> Result<Self, GitHubError> {
+        let endpoint = endpoint.into();
+        Self::build(token, token_source, endpoint.clone(), endpoint)
+    }
+
+    fn build(
+        token: Token,
+        token_source: Option<TokenSource>,
+        endpoint: String,
+        rest_endpoint: String,
+    ) -> Result<Self, GitHubError> {
         let http = reqwest::Client::builder()
             .user_agent(USER_AGENT)
             .build()
@@ -282,7 +326,8 @@ impl GitHubClient {
 
         Ok(Self {
             http,
-            endpoint: endpoint.into(),
+            endpoint,
+            rest_endpoint,
             token,
             token_source,
             retry: RetryPolicy::default(),
@@ -294,6 +339,54 @@ impl GitHubClient {
     pub const fn with_retry(mut self, retry: RetryPolicy) -> Self {
         self.retry = retry;
         self
+    }
+
+    /// Fast-forwards a fork's branch to its upstream through the REST
+    /// merge-upstream endpoint.
+    ///
+    /// GitHub only fast-forwards here: a fork that has diverged is refused as a
+    /// conflict rather than merged, which is what an operation that must never
+    /// rewrite history needs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the token is rejected, GitHub refuses the sync, or
+    /// the request cannot be completed.
+    pub async fn merge_upstream(&self, id: &RepoId, branch: &str) -> Result<(), GitHubError> {
+        let url = format!(
+            "{}/repos/{}/{}/merge-upstream",
+            self.rest_endpoint, id.owner, id.name
+        );
+
+        let response = self
+            .http
+            .post(&url)
+            .bearer_auth(self.token.expose())
+            .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+            .json(&serde_json::json!({ "branch": branch }))
+            .send()
+            .await
+            .map_err(|source| GitHubError::Transport {
+                account: id.owner.clone(),
+                source,
+            })?;
+
+        let status = response.status();
+
+        if status == reqwest::StatusCode::UNAUTHORIZED {
+            return Err(GitHubError::Unauthorised {
+                token_source: self.token_source,
+            });
+        }
+
+        if status.is_success() {
+            return Ok(());
+        }
+
+        Err(GitHubError::SyncFailed {
+            repo: id.to_string(),
+            message: sync_failure_message(status),
+        })
     }
 
     /// Lists every repository owned by `account`, following pagination.

@@ -126,6 +126,19 @@ Everything else is reported with the reason it was left alone, because a reposit
 
 Untracked files do not block an update: `git` fast-forwards alongside them, and refuses by itself in the one case where it would overwrite one.
 
+### `minato sync-fork`
+
+Syncs forks with their upstream through GitHub's merge-upstream, fast-forward only.
+
+```{.bash filename="Terminal"}
+minato sync-fork --dry-run
+minato sync-fork
+```
+
+Only a fork strictly behind its upstream is synced.
+A fork holding its own commits has diverged, so it is reported and left alone rather than merged, and no history is ever rewritten.
+Nothing is cloned or pushed: the sync happens on GitHub.
+
 ### `minato move`
 
 Moves one repository into another group, which means moving its directory.
