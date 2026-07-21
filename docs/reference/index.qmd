@@ -3,6 +3,9 @@ title: "Commands"
 subtitle: "Every capability is a command, so a person, a script, or an agent can reach any outcome."
 ---
 
+This page explains when and why to reach for each command.
+For an exhaustive list of every command and flag, see the [command reference](commands.qmd), which is generated from the binary and so never drifts.
+
 ## Shared options
 
 Every command accepts these.
