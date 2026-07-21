@@ -337,6 +337,15 @@ pub enum MoveError {
         group: String,
     },
 
+    /// The group is not a plain directory name.
+    #[error(
+        "`{group}` is not a valid group; a group is a single directory beneath a root, so it cannot contain `/`, `\\`, or be `.` or `..`"
+    )]
+    InvalidGroup {
+        /// The offending group.
+        group: String,
+    },
+
     /// The move itself failed.
     #[error("cannot move `{}` to `{}`: {message}", from.display(), to.display())]
     Failed {
@@ -422,6 +431,15 @@ pub fn move_to_group(
     group: &str,
     mode: Mode,
 ) -> Result<Report, MoveError> {
+    // A group names a single directory beneath a root. Anything with a path
+    // separator, or `.`/`..`, would move the clone outside the group tree or
+    // out of the root entirely, so it is refused before any path is built.
+    if group.is_empty() || group == "." || group == ".." || group.contains(['/', '\\']) {
+        return Err(MoveError::InvalidGroup {
+            group: group.to_owned(),
+        });
+    }
+
     let Some(path) = comparison.path.clone() else {
         return Err(MoveError::NotCloned {
             wanted: wanted.to_owned(),
@@ -719,6 +737,21 @@ mod moving {
             assert!(
                 find_one(&all, wanted).is_ok(),
                 "`{wanted}` should identify the repository"
+            );
+        }
+    }
+
+    #[test]
+    fn refuses_a_group_name_that_is_not_a_plain_directory() {
+        let repository = cloned("minato", Some("perso"), "/code/perso/minato");
+
+        for bad in ["../evil", "a/b", "..", ".", ""] {
+            assert!(
+                matches!(
+                    move_to_group(&repository, "minato", &roots(), bad, Mode::DryRun),
+                    Err(MoveError::InvalidGroup { .. })
+                ),
+                "group `{bad}` should be rejected as invalid"
             );
         }
     }

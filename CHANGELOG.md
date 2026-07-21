@@ -28,4 +28,5 @@ All notable changes to this project will be documented in this file.
 - fix: reject `.` or `..` as a repository owner or name, so a crafted identity from cache or configuration cannot build a directory-escaping path (#41).
 - fix: report unreadable roots and skipped paths from `clone`, `fetch`, and `update` too, not only `status`, so a mistyped root is never silent (#42).
 - fix: list each account once when a login appears under both `users` and `orgs` or in a different case, so repositories are no longer fetched, reported, and cloned twice (#44).
+- fix: reject a `move --to-group` name that is not a plain directory (empty, `.`, `..`, or containing a path separator), so a clone cannot be moved outside its root (#46).
 - fix: pass the clone destination to git as its real path rather than a lossy display string, so a non-UTF-8 path is not mangled (#45).
