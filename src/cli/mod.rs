@@ -356,7 +356,15 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
         Act::Update => actions::update_all(&comparisons, mode),
     };
 
-    summary_output(cli.json, &summary)
+    let mut output = summary_output(cli.json, &summary)?;
+
+    // A root that could not be read would otherwise make every repository look
+    // uncloned with no hint why, so the scan's notes travel with the result.
+    if !cli.json {
+        append_scan_notes(&mut output.text, &scanned);
+    }
+
+    Ok(output)
 }
 
 /// Renders a batch summary as JSON or a table, carrying the failure flag.
@@ -893,6 +901,15 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
 
     let mut out = finish(&table, gathered.staleness, "repositories");
 
+    append_scan_notes(&mut out, &scanned);
+
+    Ok(out)
+}
+
+/// Appends the roots a scan could not read, and the paths it deliberately
+/// skipped, to a command's text output, so they are never inferred from a
+/// short or empty result.
+fn append_scan_notes(out: &mut String, scanned: &scan::Scan) {
     for failure in &scanned.failures {
         let _ = write!(out, "\n{failure}");
     }
@@ -912,8 +929,6 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
             bare.display()
         );
     }
-
-    Ok(out)
 }
 
 /// Finds the directory a group already occupies beneath one of the roots.
@@ -1039,6 +1054,32 @@ mod tests {
             assert!(parsed.include_forks);
             assert!(parsed.include_external);
         }
+    }
+
+    #[test]
+    fn scan_notes_surface_failures_and_skipped_paths() {
+        let scanned = scan::Scan {
+            repositories: Vec::new(),
+            failures: vec![scan::ScanError {
+                root: PathBuf::from("/bad/root"),
+                message: "no such directory".to_owned(),
+            }],
+            skipped_symlinks: vec![PathBuf::from("/root/projects")],
+            skipped_bare: vec![PathBuf::from("/root/mirror.git")],
+        };
+
+        let mut out = String::new();
+        append_scan_notes(&mut out, &scanned);
+
+        assert!(out.contains("/bad/root"), "a failure names its root: {out}");
+        assert!(
+            out.contains("/root/projects"),
+            "a skipped symlink is named: {out}"
+        );
+        assert!(
+            out.contains("/root/mirror.git"),
+            "a skipped bare repository is named: {out}"
+        );
     }
 
     #[test]
