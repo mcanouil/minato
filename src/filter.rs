@@ -4,7 +4,7 @@
 //! nobody set matches everything, so an unfiltered command is the same code
 //! path as a filtered one.
 
-use crate::compare::{Comparison, State};
+use crate::compare::{Comparison, LocalOnlyReason, State};
 
 /// Which repositories to keep.
 #[derive(Debug, Default, Clone)]
@@ -17,6 +17,13 @@ pub struct Filter {
 
     /// Keep only these states, when any are named.
     pub states: Vec<StateFilter>,
+
+    /// Keep forks, which are hidden by default.
+    pub include_forks: bool,
+
+    /// Keep clones of repositories owned by nobody the user tracks, which are
+    /// hidden by default.
+    pub include_external: bool,
 }
 
 /// A state named on the command line.
@@ -66,21 +73,26 @@ impl Filter {
         self.owners.is_empty() && self.groups.is_empty() && self.states.is_empty()
     }
 
-    /// Whether a comparison survives every named condition.
+    /// Whether a comparison survives every condition.
+    ///
+    /// Beyond the named owner, group, and state conditions, forks and clones of
+    /// untracked owners are dropped unless explicitly included, so the default
+    /// view is the repositories the user maintains.
     #[must_use]
     pub fn accepts(&self, comparison: &Comparison) -> bool {
         self.accepts_owner(comparison)
             && self.accepts_group(comparison)
             && self.accepts_state(comparison)
+            && self.accepts_fork(comparison)
+            && self.accepts_external(comparison)
     }
 
     /// Keeps only the comparisons that survive.
+    ///
+    /// This always filters, because forks and external clones are dropped even
+    /// when no owner, group, or state was named.
     #[must_use]
     pub fn apply(&self, comparisons: Vec<Comparison>) -> Vec<Comparison> {
-        if self.is_empty() {
-            return comparisons;
-        }
-
         comparisons
             .into_iter()
             .filter(|comparison| self.accepts(comparison))
@@ -118,11 +130,24 @@ impl Filter {
                 .iter()
                 .any(|state| state.accepts(&comparison.state))
     }
+
+    fn accepts_fork(&self, comparison: &Comparison) -> bool {
+        self.include_forks || !comparison.remote.is_some_and(|remote| remote.fork)
+    }
+
+    fn accepts_external(&self, comparison: &Comparison) -> bool {
+        self.include_external
+            || !matches!(
+                comparison.state,
+                State::LocalOnly(LocalOnlyReason::OwnerNotTracked)
+            )
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::compare::RemoteFlags;
     use crate::model::{Provider, RepoId};
     use std::path::PathBuf;
 
@@ -138,6 +163,16 @@ mod tests {
         }
     }
 
+    fn fork(owner: &str, state: State) -> Comparison {
+        Comparison {
+            remote: Some(RemoteFlags {
+                fork: true,
+                ..RemoteFlags::default()
+            }),
+            ..comparison(owner, None, state)
+        }
+    }
+
     #[test]
     fn a_filter_nobody_set_keeps_everything() {
         let all = vec![
@@ -146,6 +181,57 @@ mod tests {
         ];
 
         assert_eq!(Filter::default().apply(all.clone()).len(), all.len());
+    }
+
+    #[test]
+    fn forks_are_hidden_by_default_and_shown_when_included() {
+        let it = vec![fork("mcanouil", State::InSync)];
+
+        assert!(Filter::default().apply(it.clone()).is_empty());
+
+        let including = Filter {
+            include_forks: true,
+            ..Filter::default()
+        };
+        assert_eq!(including.apply(it).len(), 1);
+    }
+
+    #[test]
+    fn a_fork_that_is_also_behind_is_still_hidden() {
+        let it = vec![fork("mcanouil", State::Behind { behind: 3 })];
+
+        assert!(Filter::default().apply(it).is_empty());
+    }
+
+    #[test]
+    fn external_clones_are_hidden_by_default_and_shown_when_included() {
+        let it = vec![comparison(
+            "someone",
+            None,
+            State::LocalOnly(LocalOnlyReason::OwnerNotTracked),
+        )];
+
+        assert!(Filter::default().apply(it.clone()).is_empty());
+
+        let including = Filter {
+            include_external: true,
+            ..Filter::default()
+        };
+        assert_eq!(including.apply(it).len(), 1);
+    }
+
+    #[test]
+    fn local_only_clones_that_are_not_external_stay_visible() {
+        let kept = Filter::default().apply(vec![
+            comparison("x", None, State::LocalOnly(LocalOnlyReason::NoRemote)),
+            comparison(
+                "y",
+                None,
+                State::LocalOnly(LocalOnlyReason::UnsupportedHost),
+            ),
+        ]);
+
+        assert_eq!(kept.len(), 2);
     }
 
     #[test]

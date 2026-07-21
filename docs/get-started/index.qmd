@@ -100,6 +100,9 @@ ok  cache          /Users/you/.cache/minato
 minato status --state drifted
 ```
 
+Forks and clones of repositories you do not own are left out by default, so this is the repositories you maintain.
+Add `--include-forks` or `--include-external` to bring them back.
+
 Provider responses are cached for the `cache.ttl` window, fifteen minutes by default, so a second run is effectively instant, and cached output always says how old it is.
 Set `cache.ttl` to any friendly duration such as `"1h"`, or add `--refresh` to ask again straight away.
 

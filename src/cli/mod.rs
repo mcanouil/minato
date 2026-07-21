@@ -28,6 +28,9 @@ use render::{Table, describe_age};
 /// Overview and sync of Git repositories across hosting providers.
 #[derive(Debug, Parser)]
 #[command(name = "minato", version, about)]
+// Each bool is an independent, order-free command-line flag, which is the
+// natural shape for a CLI rather than a state machine to be split up.
+#[allow(clippy::struct_excessive_bools)]
 pub struct Cli {
     /// Emit JSON instead of a table.
     #[arg(long, global = true)]
@@ -49,6 +52,15 @@ pub struct Cli {
     /// Keep only repositories in these states.
     #[arg(long = "state", global = true, value_name = "STATE")]
     pub states: Vec<filter::StateFilter>,
+
+    /// Include forks, which are hidden by default.
+    #[arg(long, global = true)]
+    pub include_forks: bool,
+
+    /// Include clones of repositories owned by nobody you track, which are
+    /// hidden by default.
+    #[arg(long, global = true)]
+    pub include_external: bool,
 
     #[command(subcommand)]
     pub command: Command,
@@ -214,6 +226,8 @@ impl Cli {
             owners: self.owners.clone(),
             groups: self.groups.clone(),
             states: self.states.clone(),
+            include_forks: self.include_forks,
+            include_external: self.include_external,
         }
     }
 }
@@ -678,8 +692,14 @@ async fn list(cli: &Cli) -> Result<String, CliError> {
     let config = Config::load_from(&paths.config)?;
     let gathered = gather(cli, &paths, &config).await?;
 
+    let remotes: Vec<_> = gathered
+        .remotes
+        .iter()
+        .filter(|repo| cli.include_forks || !repo.is_fork)
+        .collect();
+
     if cli.json {
-        return Ok(serde_json::to_string_pretty(&gathered.remotes)?);
+        return Ok(serde_json::to_string_pretty(&remotes)?);
     }
 
     let mut table = Table::new([
@@ -694,7 +714,7 @@ async fn list(cli: &Cli) -> Result<String, CliError> {
 
     let now = Timestamp::now();
 
-    for repo in &gathered.remotes {
+    for repo in &remotes {
         let metadata = &repo.metadata;
 
         table.push([
@@ -872,6 +892,18 @@ mod tests {
                 .unwrap_or_else(|error| panic!("{arguments:?} should parse: {error}"));
 
             assert!(parsed.json || parsed.refresh);
+        }
+    }
+
+    #[test]
+    fn the_include_flags_are_available_on_every_command() {
+        for command in ["list", "status", "tui"] {
+            let parsed =
+                Cli::try_parse_from(["minato", command, "--include-forks", "--include-external"])
+                    .unwrap_or_else(|error| panic!("{command} should parse: {error}"));
+
+            assert!(parsed.include_forks);
+            assert!(parsed.include_external);
         }
     }
 
