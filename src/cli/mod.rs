@@ -764,15 +764,31 @@ struct Gathered {
     staleness: Option<jiff::SignedDuration>,
 }
 
+/// The accounts to enumerate, each login once regardless of case or of being
+/// listed under both `users` and `orgs`.
+///
+/// A login that appears twice would otherwise fetch and clone the same
+/// repositories twice, doubling the report and racing two clones into one path.
+fn accounts_of(github: &config::GitHub) -> Vec<Account> {
+    let mut seen = std::collections::HashSet::new();
+
+    github
+        .users
+        .iter()
+        .chain(github.orgs.iter())
+        .filter(|login| seen.insert(login.to_lowercase()))
+        .map(Account::new)
+        .collect()
+}
+
 /// Loads configuration, then fills in the remote side from cache or provider.
 async fn gather(cli: &Cli, paths: &Paths, config: &Config) -> Result<Gathered, CliError> {
-    let accounts: Vec<Account> = config
+    let accounts = config
         .providers
         .github
-        .iter()
-        .flat_map(|github| github.users.iter().chain(github.orgs.iter()))
-        .map(Account::new)
-        .collect();
+        .as_ref()
+        .map(accounts_of)
+        .unwrap_or_default();
 
     let tracked = TrackedOwners::new(
         accounts
@@ -1054,6 +1070,21 @@ mod tests {
             assert!(parsed.include_forks);
             assert!(parsed.include_external);
         }
+    }
+
+    #[test]
+    fn accounts_are_listed_once_regardless_of_case_or_duplication() {
+        let github = config::GitHub {
+            users: vec!["mcanouil".to_owned(), "MCANOUIL".to_owned()],
+            orgs: vec!["mcanouil".to_owned(), "posit".to_owned()],
+        };
+
+        let logins: Vec<_> = accounts_of(&github)
+            .iter()
+            .map(|account| account.login().to_owned())
+            .collect();
+
+        assert_eq!(logins, ["mcanouil", "posit"]);
     }
 
     #[test]

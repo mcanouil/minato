@@ -27,3 +27,4 @@ All notable changes to this project will be documented in this file.
 - fix: escape quotes and backslashes when building the fork-comparison GraphQL query, so an unusual branch name cannot corrupt the request (#40).
 - fix: reject `.` or `..` as a repository owner or name, so a crafted identity from cache or configuration cannot build a directory-escaping path (#41).
 - fix: report unreadable roots and skipped paths from `clone`, `fetch`, and `update` too, not only `status`, so a mistyped root is never silent (#42).
+- fix: list each account once when a login appears under both `users` and `orgs` or in a different case, so repositories are no longer fetched, reported, and cloned twice (#43).
