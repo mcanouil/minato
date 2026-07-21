@@ -26,3 +26,4 @@ All notable changes to this project will be documented in this file.
 - fix: skip a clone with no `origin` remote when fetching rather than attempting it, so one never-published clone no longer fails the whole `fetch` (#39).
 - fix: escape quotes and backslashes when building the fork-comparison GraphQL query, so an unusual branch name cannot corrupt the request (#40).
 - fix: reject `.` or `..` as a repository owner or name, so a crafted identity from cache or configuration cannot build a directory-escaping path (#41).
+- fix: report unreadable roots and skipped paths from `clone`, `fetch`, and `update` too, not only `status`, so a mistyped root is never silent (#42).
