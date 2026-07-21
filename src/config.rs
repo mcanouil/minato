@@ -319,7 +319,7 @@ impl Config {
 /// [`ResolvedRoots::from_resolved`] wraps paths a caller has already resolved.
 /// [`scan`](crate::scan::scan) accepts nothing else, so handing it the verbatim
 /// [`Config`] roots cannot compile.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ResolvedRoots(Vec<PathBuf>);
 
 impl ResolvedRoots {
