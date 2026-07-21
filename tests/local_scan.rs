@@ -437,3 +437,33 @@ fn scans_the_same_root_once_even_when_it_is_listed_twice() {
 
     assert_eq!(found.repositories.len(), 1);
 }
+
+#[cfg(unix)]
+#[test]
+fn reports_a_symlinked_directory_rather_than_following_it() {
+    // The clone lives outside the scanned root, reachable only through a
+    // symlink, so following the link is the only way it could be found.
+    let target = tempfile::tempdir().expect("a target directory");
+    let clone = target.path().join("project");
+    init_repository(&clone);
+    commit(&clone, "first");
+
+    let root = tempfile::tempdir().expect("a temporary directory");
+    let link = root.path().join("projects");
+    std::os::unix::fs::symlink(target.path(), &link).expect("a symlink");
+
+    let found = scan::scan(
+        &roots(vec![root.path().to_owned()]),
+        scan::DEFAULT_MAX_DEPTH,
+    );
+
+    assert!(
+        found.repositories.is_empty(),
+        "a symlink is not followed, so the clone behind it is not found"
+    );
+    assert_eq!(
+        found.skipped_symlinks,
+        vec![link],
+        "the skipped link is reported so the clone behind it is not silently missing"
+    );
+}
