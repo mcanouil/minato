@@ -126,7 +126,11 @@ jobs:
           cargo update --workspace --offline || cargo update --workspace
 
           git add Cargo.toml Cargo.lock CITATION.cff CHANGELOG.md
-          git commit -m "ci: bump version to ${VERSION} :rocket:"
+          # Skip CI on the squash-merged bump: the build job already tests and
+          # lints the bump commit before the release, so a second CI run on the
+          # push to main would be redundant. The marker carries into the squash
+          # commit message, which is what the push event inspects.
+          git commit -m "ci: bump version to ${VERSION} :rocket:" -m "[skip ci]"
           git push --force origin "${BRANCH}"
 
           sleep 5
