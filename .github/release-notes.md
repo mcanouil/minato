@@ -18,7 +18,7 @@ Pick the archive for your machine from the table below, then:
 
 ```bash
 VERSION=%%VERSION%%
-TARGET=x86_64-unknown-linux-gnu   # or whichever row matches
+TARGET=x86_64-unknown-linux-musl   # or whichever row matches
 
 curl -fsSLO "https://github.com/mcanouil/minato/releases/download/${VERSION}/minato-${VERSION}-${TARGET}.tar.gz"
 curl -fsSLO "https://github.com/mcanouil/minato/releases/download/${VERSION}/SHA256SUMS"
@@ -62,7 +62,7 @@ devcontainer exec --workspace-folder . cargo install --path .
 Beyond the checksum, every archive carries build provenance, so you can confirm it came from this repository's workflow and not from somewhere else:
 
 ```bash
-gh attestation verify "minato-%%VERSION%%-x86_64-unknown-linux-gnu.tar.gz" \
+gh attestation verify "minato-%%VERSION%%-x86_64-unknown-linux-musl.tar.gz" \
   --repo mcanouil/minato
 ```
 
@@ -70,8 +70,8 @@ gh attestation verify "minato-%%VERSION%%-x86_64-unknown-linux-gnu.tar.gz" \
 
 | Archive | For |
 | --- | --- |
-| `minato-%%VERSION%%-x86_64-unknown-linux-gnu.tar.gz` | Linux on Intel or AMD. |
-| `minato-%%VERSION%%-aarch64-unknown-linux-gnu.tar.gz` | Linux on ARM, including most cloud instances. |
+| `minato-%%VERSION%%-x86_64-unknown-linux-musl.tar.gz` | Linux on Intel or AMD, any distribution. |
+| `minato-%%VERSION%%-aarch64-unknown-linux-musl.tar.gz` | Linux on ARM, including most cloud instances. |
 | `minato-%%VERSION%%-aarch64-apple-darwin.tar.gz` | macOS on Apple silicon. |
 | `minato-%%VERSION%%-x86_64-apple-darwin.tar.gz` | macOS on Intel. |
 | `minato-%%VERSION%%-x86_64-pc-windows-msvc.zip` | Windows on Intel or AMD. |

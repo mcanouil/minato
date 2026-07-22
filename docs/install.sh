@@ -68,7 +68,7 @@ detect_target() {
 	local os arch
 	case "$(uname -s)" in
 	Darwin) os="apple-darwin" ;;
-	Linux) os="unknown-linux-gnu" ;;
+	Linux) os="unknown-linux-musl" ;;
 	*) error "Unsupported OS: $(uname -s). minato ships binaries for macOS and Linux; on Windows use the .zip from the releases page." ;;
 	esac
 	case "$(uname -m)" in

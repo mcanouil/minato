@@ -180,9 +180,9 @@ jobs:
             os: macos-latest
           - target: x86_64-apple-darwin
             os: macos-latest
-          - target: x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
+          - target: aarch64-unknown-linux-musl
             os: ubuntu-24.04-arm
           - target: x86_64-pc-windows-msvc
             os: windows-latest
@@ -208,6 +208,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+
+      # A musl target links its C dependency (ring's crypto) with musl-gcc.
+      # Both Linux runners are already the target architecture, so this is a
+      # native build, not a cross-compile.
+      - name: Install musl tools
+        if: ${{ endsWith(matrix.target, '-musl') }}
+        run: sudo apt-get update && sudo apt-get install --yes musl-tools
 
       - name: Build
         run: cargo build --locked --release --target ${{ matrix.target }}
