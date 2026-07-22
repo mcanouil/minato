@@ -30,8 +30,12 @@ pub enum Action {
     Fetch,
     /// Fast-forward the highlighted clone.
     Update,
-    /// Clone the highlighted repository.
-    Clone,
+    /// Clone the highlighted repository into a group, or into the root when
+    /// none is named.
+    Clone {
+        /// The group to clone into, absent for none.
+        group: Option<String>,
+    },
 }
 
 /// What the browser wants doing after a key.
@@ -141,6 +145,24 @@ fn handle_event(app: &mut App) -> io::Result<Step> {
         return Ok(Step::Continue);
     }
 
+    // While choosing a clone destination, keys type the group name, apart from
+    // the two that confirm or cancel.
+    if app.is_cloning() {
+        match key.code {
+            KeyCode::Esc => app.cancel_clone(),
+            KeyCode::Enter => {
+                let group = app.finish_clone();
+                let group = (!group.trim().is_empty()).then(|| group.trim().to_owned());
+                return Ok(Step::Act(Action::Clone { group }));
+            }
+            KeyCode::Backspace => app.pop_group(),
+            KeyCode::Char(character) => app.push_group(character),
+            _ => {}
+        }
+
+        return Ok(Step::Continue);
+    }
+
     match key.code {
         KeyCode::Char('q') | KeyCode::Esc => return Ok(Step::Quit),
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -153,7 +175,11 @@ fn handle_event(app: &mut App) -> io::Result<Step> {
         KeyCode::Char('/') => app.start_search(),
         KeyCode::Char('s') => app.cycle_sort(),
         KeyCode::Char('r') => return Ok(Step::Reload),
-        KeyCode::Char('c') => return Ok(Step::Act(Action::Clone)),
+        KeyCode::Char('c') => match app.current().map(|current| &current.state) {
+            Some(State::RemoteOnly) => app.start_clone(),
+            Some(_) => app.set_message("That repository already has a clone."),
+            None => app.set_message("Nothing selected."),
+        },
         KeyCode::Char('f') => return Ok(Step::Act(Action::Fetch)),
         KeyCode::Char('u') => return Ok(Step::Act(Action::Update)),
         _ => {}
@@ -264,7 +290,18 @@ fn draw(frame: &mut Frame, app: &App) {
 
     frame.render_stateful_widget(table, areas[1], &mut state);
 
-    let footer = if app.is_searching() {
+    let footer = if app.is_cloning() {
+        let known = app.known_groups();
+        let hint = if known.is_empty() {
+            "new group".to_owned()
+        } else {
+            format!("existing: {}", known.join(", "))
+        };
+        Line::from(format!(
+            "Clone into group: {}▏  Enter to clone, Esc to cancel  ({hint})",
+            app.group_input()
+        ))
+    } else if app.is_searching() {
         Line::from(format!("/{}", app.query()))
     } else if let Some(message) = app.message() {
         Line::from(Span::styled(
@@ -473,6 +510,23 @@ mod rendering {
     }
 
     #[test]
+    fn choosing_a_clone_group_shows_the_prompt_and_the_existing_groups() {
+        let mut app = App::new(rows());
+        app.start_clone();
+        for character in "arch".chars() {
+            app.push_group(character);
+        }
+
+        let rendered = screen(&app);
+
+        assert!(rendered.contains("Clone into group: arch"), "{rendered}");
+        assert!(
+            rendered.contains("existing: perso"),
+            "the groups that already hold a clone are offered:\n{rendered}"
+        );
+    }
+
+    #[test]
     fn a_done_action_reports_it_and_asks_for_a_rebuild() {
         let app = App::new(rows());
         let mut apply = |_: &Action, comparison: &Comparison| actions::Summary {
@@ -485,7 +539,7 @@ mod rendering {
             }],
         };
 
-        let (message, ran) = act(&app, &Action::Clone, &mut apply);
+        let (message, ran) = act(&app, &Action::Clone { group: None }, &mut apply);
 
         assert!(message.starts_with("Done:"), "{message}");
         assert!(ran, "a change should ask for a rebuild");
@@ -504,7 +558,7 @@ mod rendering {
             }],
         };
 
-        let (message, ran) = act(&app, &Action::Clone, &mut apply);
+        let (message, ran) = act(&app, &Action::Clone { group: None }, &mut apply);
 
         assert!(message.starts_with("Skipped:"), "{message}");
         assert!(!ran, "a skip changed nothing, so no rebuild");

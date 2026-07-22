@@ -581,7 +581,7 @@ async fn tui(cli: &Cli) -> Result<Output, CliError> {
         match action {
             crate::tui::Action::Fetch => actions::fetch_all(&selection, Mode::Execute),
             crate::tui::Action::Update => actions::update_all(&selection, Mode::Execute),
-            crate::tui::Action::Clone => clone_root.as_ref().map_or_else(
+            crate::tui::Action::Clone { group } => clone_root.as_ref().map_or_else(
                 || actions::Summary {
                     reports: vec![actions::Report {
                         id: comparison.id.clone(),
@@ -592,7 +592,23 @@ async fn tui(cli: &Cli) -> Result<Output, CliError> {
                     }],
                 },
                 |root| {
-                    actions::clone_missing(&selection, root, &config.local, false, Mode::Execute)
+                    // A named group is where its directory already sits, or a
+                    // new one beneath the first root; no group clones into the
+                    // root directly, as `minato clone` does.
+                    let destination = group.as_deref().map_or_else(
+                        || root.clone(),
+                        |group| {
+                            directory_for_group(&roots, group).unwrap_or_else(|| root.join(group))
+                        },
+                    );
+
+                    actions::clone_missing(
+                        &selection,
+                        &destination,
+                        &config.local,
+                        false,
+                        Mode::Execute,
+                    )
                 },
             ),
         }
