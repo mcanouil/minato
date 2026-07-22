@@ -5,12 +5,12 @@ subtitle: "The provider abstraction, and the state machine behind comparison and
 
 ## Scope
 
-This note records the decisions that shape `minato` and the reasoning behind them.
+This note records the decisions that shape Minato and the reasoning behind them.
 It is updated as each phase lands, so it describes what exists rather than what is planned.
 
 ## Why shell out to `git`
 
-`minato` invokes the system `git` binary rather than linking a Git library.
+Minato invokes the system `git` binary rather than linking a Git library.
 
 The user's SSH agent, credential helpers, and `git` configuration then apply unchanged, so authentication for clone and fetch needs no separate implementation.
 It also keeps the dependency tree free of native build requirements.
@@ -70,7 +70,7 @@ They are split by where they come from, and are absent rather than false when th
 An untracked file is usually a build artefact, and git fast-forwards happily alongside one, refusing by itself in the single case where the incoming commit would overwrite it.
 Treating the two alike would mark a repository unupdatable for as long as a stray log file sat in it.
 
-`LocalOnly` is subdivided by cause, since the remedies differ: the clone has no remote at all, its remote points at a host `minato` does not support, its owner is not configured so the provider was never asked, or the owner is configured and the provider did not report it.
+`LocalOnly` is subdivided by cause, since the remedies differ: the clone has no remote at all, its remote points at a host Minato does not support, its owner is not configured so the provider was never asked, or the owner is configured and the provider did not report it.
 That last case covers deletion, renaming, and a repository turning private.
 These are not told apart, because nothing gathered so far can distinguish them: doing so needs the provider's stable repository identifier, which is not yet fetched.
 

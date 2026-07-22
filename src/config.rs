@@ -158,9 +158,9 @@ pub enum ValidationError {
         layout: String,
     },
 
-    /// The layout used a placeholder `minato` does not substitute.
+    /// The layout used a placeholder Minato does not substitute.
     #[error(
-        "`local.layout` uses `{{{placeholder}}}`, which is not a placeholder `minato` knows; use any of {}",
+        "`local.layout` uses `{{{placeholder}}}`, which is not a placeholder Minato knows; use any of {}",
         known_placeholders()
     )]
     LayoutUnknownPlaceholder {

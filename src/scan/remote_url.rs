@@ -20,14 +20,14 @@ const KNOWN_HOSTS: [(&str, Provider); 2] = [
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseRemoteError {
     /// The URL did not name a host and a path.
-    #[error("remote `{url}` is not a URL `minato` can read")]
+    #[error("remote `{url}` is not a URL Minato can read")]
     Unreadable {
         /// The remote as configured.
         url: String,
     },
 
-    /// The host is not one `minato` knows.
-    #[error("remote `{url}` points at `{host}`, which is not a provider `minato` supports")]
+    /// The host is not one Minato knows.
+    #[error("remote `{url}` points at `{host}`, which is not a provider Minato supports")]
     UnknownHost {
         /// The remote as configured.
         url: String,

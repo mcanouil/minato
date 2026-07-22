@@ -1,5 +1,5 @@
 ---
-title: "minato"
+title: "Minato"
 toc: false
 sidebar: false
 include-in-header:
@@ -13,13 +13,13 @@ include-in-header:
 
 ::: {.hero-content}
 
-# minato
+# Minato
 
 [A harbour for your repositories.]{.lead}
 
 Repositories accumulate across hosting providers while local clones drift away from them.
 Some remotes are never cloned, some clones are abandoned, and forks fall behind what they were forked from.
-`minato` shows that whole picture at once, then offers safe, scriptable ways to close the gap.
+Minato shows that whole picture at once, then offers safe, scriptable ways to close the gap.
 
 [Get started](get-started/index.qmd){.btn .btn-primary .btn-lg}
 [View on GitHub](https://github.com/mcanouil/minato){.btn .btn-outline-secondary .btn-lg}
@@ -98,7 +98,7 @@ Every command takes `--json`, so anything the interface offers can be done by a 
 
 ## Nothing surprising happens
 
-`minato` never force-pushes, never rebases, and never discards a change.
+Minato never force-pushes, never rebases, and never discards a change.
 An update is only ever a fast-forward, so if the situation has been misjudged, `git` refuses rather than improvising.
 
 Anything that changes your filesystem is explicit, offers a rehearsal with `--dry-run` first, and reports what it deliberately did not touch.

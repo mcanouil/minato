@@ -53,7 +53,7 @@ body:
       label: Environment
       description: |
         Run `minato --version` and `git --version`, and note your operating system.
-        `minato` shells out to `git`, so the `git` version and how your remotes are configured are often relevant.
+        Minato shells out to `git`, so the `git` version and how your remotes are configured are often relevant.
       placeholder: |
         - minato: 0.1.0
         - git: 2.45.0

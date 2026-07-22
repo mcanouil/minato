@@ -1,4 +1,4 @@
-# Contributing to minato
+# Contributing to Minato
 
 Thanks for taking the time to help.
 
@@ -6,7 +6,7 @@ Thanks for taking the time to help.
 
 Open an [issue](https://github.com/mcanouil/minato/issues) describing what you did, what you expected, and what happened instead.
 Include the output of `minato --version`, your operating system, and a minimal set of steps to reproduce it.
-Since `minato` shells out to `git`, the `git --version` and how your remotes are configured are often relevant too.
+Since Minato shells out to `git`, the `git --version` and how your remotes are configured are often relevant too.
 
 ## Development
 
@@ -28,7 +28,7 @@ devcontainer up --workspace-folder .
 devcontainer exec --workspace-folder . cargo test --locked
 ```
 
-It has been verified end to end: the container builds, all tests pass inside it, and `minato` itself runs there.
+It has been verified end to end: the container builds, all tests pass inside it, and Minato itself runs there.
 It carries Rust, `git`, `gh`, `jq`, and `kata`, with the kata ledger bind-mounted from the host so issue state is shared.
 
 Two things worth knowing.
