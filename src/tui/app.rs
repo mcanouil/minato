@@ -63,6 +63,8 @@ pub struct App {
     sort: Sort,
     message: Option<String>,
     searching: bool,
+    cloning: bool,
+    group: String,
 }
 
 impl App {
@@ -198,6 +200,59 @@ impl App {
     pub fn cycle_sort(&mut self) {
         self.sort = self.sort.next();
         self.refilter();
+    }
+
+    /// Whether a clone destination is being chosen.
+    #[must_use]
+    pub const fn is_cloning(&self) -> bool {
+        self.cloning
+    }
+
+    /// The group name being typed for a clone.
+    #[must_use]
+    pub fn group_input(&self) -> &str {
+        &self.group
+    }
+
+    /// The groups that already hold a clone, offered to choose from.
+    #[must_use]
+    pub fn known_groups(&self) -> Vec<String> {
+        let mut groups: Vec<String> = self
+            .rows
+            .iter()
+            .filter_map(|row| row.group.clone())
+            .collect();
+        groups.sort();
+        groups.dedup();
+        groups
+    }
+
+    /// Starts choosing a group to clone the highlighted repository into.
+    pub fn start_clone(&mut self) {
+        self.cloning = true;
+        self.group.clear();
+    }
+
+    /// Adds a character to the group being typed.
+    pub fn push_group(&mut self, character: char) {
+        self.group.push(character);
+    }
+
+    /// Removes the last character from the group being typed.
+    pub fn pop_group(&mut self) {
+        self.group.pop();
+    }
+
+    /// Stops choosing a group, discarding what was typed.
+    pub fn cancel_clone(&mut self) {
+        self.cloning = false;
+        self.group.clear();
+    }
+
+    /// Stops choosing and returns the chosen group, empty for none.
+    pub fn finish_clone(&mut self) -> String {
+        self.cloning = false;
+        std::mem::take(&mut self.group)
     }
 
     /// Replaces the contents, keeping the search and ordering.
@@ -498,6 +553,44 @@ mod tests {
 
         app.clear_message();
         assert_eq!(app.message(), None);
+    }
+
+    #[test]
+    fn choosing_a_clone_group_collects_the_typed_name() {
+        let mut app = sample();
+        assert!(!app.is_cloning());
+
+        app.start_clone();
+        assert!(app.is_cloning());
+
+        for character in "demo".chars() {
+            app.push_group(character);
+        }
+        app.pop_group();
+        assert_eq!(app.group_input(), "dem");
+
+        let group = app.finish_clone();
+        assert_eq!(group, "dem");
+        assert!(!app.is_cloning(), "confirming leaves the prompt");
+        assert_eq!(app.group_input(), "", "the buffer is emptied");
+    }
+
+    #[test]
+    fn cancelling_a_clone_discards_the_typed_group() {
+        let mut app = sample();
+        app.start_clone();
+        app.push_group('x');
+
+        app.cancel_clone();
+
+        assert!(!app.is_cloning());
+        assert_eq!(app.group_input(), "");
+    }
+
+    #[test]
+    fn the_known_groups_are_the_distinct_ones_that_hold_a_clone() {
+        // sample() has groups perso, demo, perso.
+        assert_eq!(sample().known_groups(), ["demo", "perso"]);
     }
 
     #[test]
