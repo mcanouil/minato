@@ -28,10 +28,14 @@ cargo install --git https://github.com/mcanouil/minato --tag <version>
 Every [release](https://github.com/mcanouil/minato/releases) carries an archive for macOS on Apple silicon and Intel, Linux on x86-64 and ARM64, and Windows, each holding the binary alone.
 
 ```{.bash filename="Terminal"}
+curl -fsSLO https://github.com/mcanouil/minato/releases/download/<version>/minato-<version>-<target>.tar.gz
+curl -fsSLO https://github.com/mcanouil/minato/releases/download/<version>/SHA256SUMS
+sha256sum --ignore-missing --check SHA256SUMS
 tar -xzf minato-<version>-<target>.tar.gz
 sudo install minato /usr/local/bin/minato
 ```
 
+On macOS, `shasum -a 256 --ignore-missing --check SHA256SUMS` does the same job.
 On Windows, unzip the archive and put `minato.exe` somewhere on `PATH`.
 
 ### From source
@@ -40,6 +44,18 @@ On Windows, unzip the archive and put `minato.exe` somewhere on `PATH`.
 git clone https://github.com/mcanouil/minato && cd minato
 cargo install --path .
 ```
+
+### In a devcontainer
+
+No host toolchain is needed beyond Docker.
+The provided [`.devcontainer/`](https://github.com/mcanouil/minato/tree/main/.devcontainer) carries Rust, `git`, `gh`, `jq`, and `kata`.
+
+```{.bash filename="Terminal"}
+devcontainer up --workspace-folder .
+devcontainer exec --workspace-folder . cargo install --path .
+```
+
+See the [README](https://github.com/mcanouil/minato#development) for the full setup, including token handling.
 
 :::
 

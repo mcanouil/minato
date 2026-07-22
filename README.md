@@ -105,13 +105,52 @@ Deployment to GitHub Pages is deferred until the repository is public, since Pag
 
 ## Install
 
-Released builds carry a binary for macOS (Apple silicon and Intel), Linux (x86-64 and ARM64), and Windows, alongside the changelog for that version.
+### Quick install (script)
+
+```sh
+curl -fsSL https://m.canouil.dev/minato/install.sh | bash
+```
+
+Detects your platform, verifies the download against the release `SHA256SUMS`, and installs into `/usr/local/bin` when writable, otherwise `~/.local/bin`.
+Set `MINATO_VERSION` to pin a release, `MINATO_INSTALL_DIR` to choose where it lands, or `MINATO_SKIP_CHECKSUM=1` to skip verification.
+On Windows, use the `.zip` from the releases page instead.
+
+### With cargo
 
 ```sh
 cargo install --git https://github.com/mcanouil/minato --tag <version>
 ```
 
-Or download the archive for your platform from a [release](https://github.com/mcanouil/minato/releases) and put `minato` on your `PATH`.
+### From a released binary
+
+Every [release](https://github.com/mcanouil/minato/releases) carries a binary for macOS (Apple silicon and Intel), Linux (x86-64 and ARM64), and Windows.
+
+```sh
+curl -fsSLO https://github.com/mcanouil/minato/releases/download/<version>/minato-<version>-<target>.tar.gz
+curl -fsSLO https://github.com/mcanouil/minato/releases/download/<version>/SHA256SUMS
+sha256sum --ignore-missing --check SHA256SUMS
+tar -xzf minato-<version>-<target>.tar.gz
+install -m 0755 minato /usr/local/bin/minato
+```
+
+On macOS, `shasum -a 256 --ignore-missing --check SHA256SUMS` does the same job.
+On Windows, unzip the `.zip` and put `minato.exe` on your `PATH`.
+
+### From source
+
+```sh
+git clone https://github.com/mcanouil/minato && cd minato
+cargo install --path .
+```
+
+### In a devcontainer
+
+No host toolchain is needed beyond Docker; see [Development](#development) for the full setup.
+
+```sh
+devcontainer up --workspace-folder .
+devcontainer exec --workspace-folder . cargo install --path .
+```
 
 ## Requirements
 
