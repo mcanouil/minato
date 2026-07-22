@@ -281,6 +281,12 @@ jobs:
           ref: ${{ needs.bump-version.outputs.commit_sha }}
           token: ${{ steps.app-token.outputs.token }}
 
+      - name: Set up git identity
+        uses: ./.github/actions/setup-git-user
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          app-slug: ${{ steps.app-token.outputs.app-slug }}
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -331,6 +337,25 @@ jobs:
             --notes-file notes.md \
             dist/*.tar.gz dist/*.zip dist/SHA256SUMS
           echo "url=$(gh release view "${VERSION}" --json url --jq .url)" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore the Unreleased heading
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The next change needs somewhere to go, so put the heading back
+          # rather than making the first contributor after a release add it.
+          if grep -q '^## \[Unreleased\]' CHANGELOG.md; then
+            echo "Unreleased heading already present."
+            exit 0
+          fi
+          sed -i "0,/^## ${VERSION}/s//## [Unreleased]\n\n## ${VERSION}/" CHANGELOG.md
+          git add CHANGELOG.md
+          # Skip CI on the changelog-only reopen: it does not touch the binary.
+          git commit -m "ci: reopen the changelog for the next version" -m "[skip ci]"
+          # HEAD is detached at the bump commit, so name the destination branch.
+          git push origin HEAD:main
 
       - name: Summary
         shell: bash
