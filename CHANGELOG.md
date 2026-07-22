@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Changed
+### Performance
 
-- change: shrink the repository listing query, halving the page size and no longer counting release downloads, so GitHub is less likely to answer an account with a 502; the download count is dropped from `minato list` as a result (#68).
+- perf: shrink the repository listing query, halving the page size and no longer counting release downloads, so GitHub is less likely to answer an account with a 502; the download count is dropped from `minato list` as a result (#68).
 
 ### Bug Fixes
 
