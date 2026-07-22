@@ -40,7 +40,7 @@ The directory keeps its own name, which is not always the repository name.
 The first selects by where a clone already sits; the second says where a new one should go.
 A repository that has not been cloned is in no group, so filtering `clone` by one would match nothing.
 
-`layout` only decides the name of a *new* clone beneath the directory it is placed in.
+`layout` only decides the name of a _new_ clone beneath the directory it is placed in.
 It defaults to a flat name, because where a repository belongs is a judgement its identity does not carry.
 Use `minato clone --into <directory>` to say where.
 
@@ -54,31 +54,31 @@ Every command takes `--json` for scripts and agents, and `--refresh` to ignore c
 Commands can be narrowed with `--owner`, `--group`, and `--state`, each repeatable, and combining rather than accumulating: naming an owner and a state requires both.
 `--state drifted` is shorthand for anything not in sync, which is usually what wants attention.
 
-| Command | What it does |
-| --- | --- |
-| `minato list` | Every repository the provider reports, with stars, issues, pull requests, licence, and when it was last pushed. |
-| `minato status` | How local clones stand against the provider: not cloned, in sync, ahead, behind, diverged, or local only, with the reason. |
-| `minato clone` | Clones repositories that have no local copy. `--into <directory>` chooses where they land, defaulting to the first configured root. Skips any destination that already exists. |
-| `minato fetch` | Fetches every clone. Updates remote-tracking refs only, so it never touches a working tree and is always safe to run. |
-| `minato update` | Fast-forwards clones that are strictly behind and have no modified tracked files. Everything else is reported with the reason it was left alone. |
-| `minato move <repo> --to-group <group>` | Moves one repository into another group, which means moving its directory. |
-| `minato refresh` | Discards cached data so the next run asks the provider again. |
-| `minato auth status` | Whether a token was found and where it came from, never the token itself. |
-| `minato doctor` | Checks git, the token, configuration, roots, and the cache, reporting all of them rather than stopping at the first problem. |
-| `minato tui` | Browses the same comparison interactively. |
+| Command                                 | What it does                                                                                                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `minato list`                           | Every repository the provider reports, with stars, issues, pull requests, licence, and when it was last pushed.                                                                |
+| `minato status`                         | How local clones stand against the provider: not cloned, in sync, ahead, behind, diverged, or local only, with the reason.                                                     |
+| `minato clone`                          | Clones repositories that have no local copy. `--into <directory>` chooses where they land, defaulting to the first configured root. Skips any destination that already exists. |
+| `minato fetch`                          | Fetches every clone. Updates remote-tracking refs only, so it never touches a working tree and is always safe to run.                                                          |
+| `minato update`                         | Fast-forwards clones that are strictly behind and have no modified tracked files. Everything else is reported with the reason it was left alone.                               |
+| `minato move <repo> --to-group <group>` | Moves one repository into another group, which means moving its directory.                                                                                                     |
+| `minato refresh`                        | Discards cached data so the next run asks the provider again.                                                                                                                  |
+| `minato auth status`                    | Whether a token was found and where it came from, never the token itself.                                                                                                      |
+| `minato doctor`                         | Checks git, the token, configuration, roots, and the cache, reporting all of them rather than stopping at the first problem.                                                   |
+| `minato tui`                            | Browses the same comparison interactively.                                                                                                                                     |
 
 ### Interactive browser
 
 `minato tui` opens a keyboard-driven table over exactly the comparison the commands produce.
 
-| Key | Does |
-| --- | --- |
-| `j` `k`, arrows | Move. `g` and `G` jump to the ends. |
-| `/` | Search by repository, group, or path. `Enter` keeps it, `Esc` clears it. |
-| `s` | Cycle the ordering: name, state, group. Sorting by state puts what needs attention first. |
-| `f` `u` | Fetch or update the highlighted repository. |
-| `r` | Rescan the disk. It does not refetch, since a keystroke should not spend your rate limit; use `--refresh` for that. |
-| `q` | Leave. |
+| Key             | Does                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `j` `k`, arrows | Move. `g` and `G` jump to the ends.                                                                                 |
+| `/`             | Search by repository, group, or path. `Enter` keeps it, `Esc` clears it.                                            |
+| `s`             | Cycle the ordering: name, state, group. Sorting by state puts what needs attention first.                           |
+| `f` `u`         | Fetch or update the highlighted repository.                                                                         |
+| `r`             | Rescan the disk. It does not refetch, since a keystroke should not spend your rate limit; use `--refresh` for that. |
+| `q`             | Leave.                                                                                                              |
 
 Every action it offers calls the same function the matching command calls, so nothing can be done here that cannot be scripted.
 It needs a terminal, and says so plainly when there is not one rather than failing obscurely.
