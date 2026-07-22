@@ -235,7 +235,7 @@ fn draw(frame: &mut Frame, app: &App) {
 
     let header = Line::from(vec![
         Span::styled(
-            " minato ",
+            " Minato ",
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Cyan)

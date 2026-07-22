@@ -59,12 +59,12 @@ See [`CONTRIBUTING.md`](https://github.com/mcanouil/minato/blob/main/CONTRIBUTIN
 
 :::
 
-`minato` shells out to `git`, so it needs a `git` binary on `PATH`.
+Minato shells out to `git`, so it needs a `git` binary on `PATH`.
 Doing so is deliberate: your SSH agent, credential helpers, and `git` configuration all apply unchanged.
 
 ## Authenticate
 
-No token is ever stored by `minato`.
+No token is ever stored by Minato.
 It reads one from `MINATO_GITHUB_TOKEN`, then `GITHUB_TOKEN`, then the `gh` CLI, so it stays wherever you already keep it.
 
 ```{.bash filename="Terminal"}

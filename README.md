@@ -1,8 +1,8 @@
-# minato
+# Minato
 
 Overview and sync of Git repositories across hosting providers.
 
-`minato` shows what you have remotely, what you have cloned locally, and where the two have drifted apart.
+Minato shows what you have remotely, what you have cloned locally, and where the two have drifted apart.
 It then offers safe, scriptable actions to close the gap: clone what is missing, fetch and report, and fast-forward clones and forks that are strictly behind.
 
 GitHub is the only supported provider for now.
@@ -155,7 +155,7 @@ devcontainer exec --workspace-folder . cargo install --path .
 ## Requirements
 
 - Rust 1.88 or later (edition 2024).
-- A `git` binary on `PATH`, which `minato` shells out to so that your existing SSH agent and credential helpers work unchanged.
+- A `git` binary on `PATH`, which Minato shells out to so that your existing SSH agent and credential helpers work unchanged.
 
 ## Contributing
 

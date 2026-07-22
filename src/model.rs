@@ -583,7 +583,7 @@ mod tests {
 
             assert_eq!(
                 parsed, id,
-                "a URL minato builds must be one minato can read back"
+                "a URL Minato builds must be one Minato can read back"
             );
         }
     }

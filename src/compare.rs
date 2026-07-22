@@ -615,7 +615,7 @@ mod tests {
 
         assert!(
             result.can_fast_forward(),
-            "git fast-forwards alongside untracked files, so minato should too"
+            "git fast-forwards alongside untracked files, so Minato should too"
         );
     }
 
