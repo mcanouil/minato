@@ -849,6 +849,7 @@ async fn list(cli: &Cli) -> Result<String, CliError> {
         "STARS",
         "ISSUES",
         "PRS",
+        "DOWNLOADS",
         "LICENCE",
         "PUSHED",
     ]);
@@ -864,6 +865,10 @@ async fn list(cli: &Cli) -> Result<String, CliError> {
             metadata.stars.to_string(),
             metadata.open_issues.to_string(),
             metadata.open_pull_requests.to_string(),
+            metadata
+                .latest_release
+                .as_ref()
+                .map_or_else(|| "-".to_owned(), |release| release.downloads.to_string()),
             metadata.licence.clone().unwrap_or_else(|| "-".to_owned()),
             metadata.last_pushed.map_or_else(
                 || "-".to_owned(),
