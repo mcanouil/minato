@@ -418,9 +418,6 @@ pub struct Release {
 
     /// When the release was published, absent for a draft.
     pub published: Option<Timestamp>,
-
-    /// Downloads counted across every asset attached to the release.
-    pub downloads: u64,
 }
 
 #[cfg(test)]

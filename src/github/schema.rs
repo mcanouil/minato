@@ -13,18 +13,19 @@ use crate::model::{Metadata, Provider, Release, RemoteRepo, RepoId};
 
 /// How many repositories to ask for per page.
 ///
-/// One hundred is the maximum GitHub allows for a connection.
-pub const PAGE_SIZE: u32 = 100;
-
-/// How many release assets to count downloads across.
-const ASSET_PAGE_SIZE: u32 = 100;
+/// GitHub allows up to one hundred per connection, but the wider the page the
+/// more the server does for a single request, and an over-large query is what it
+/// answers with a 502. Fifty keeps each request cheap; pagination covers the
+/// rest, and the GraphQL budget is charged by cost rather than by request count,
+/// so more, smaller pages costs nothing extra.
+pub const PAGE_SIZE: u32 = 50;
 
 /// The query used to enumerate an account's repositories.
 ///
 /// `repositoryOwner` resolves both users and organisations, so the caller does
 /// not have to know which kind of account it is looking at.
 pub const REPOSITORIES_QUERY: &str = r"
-query($login: String!, $after: String, $pageSize: Int!, $assetPageSize: Int!) {
+query($login: String!, $after: String, $pageSize: Int!) {
   repositoryOwner(login: $login) {
     repositories(first: $pageSize, after: $after, ownerAffiliations: [OWNER], orderBy: {field: NAME, direction: ASC}) {
       pageInfo { hasNextPage endCursor }
@@ -48,7 +49,6 @@ query($login: String!, $after: String, $pageSize: Int!, $assetPageSize: Int!) {
           nodes {
             tagName
             publishedAt
-            releaseAssets(first: $assetPageSize) { nodes { downloadCount } }
           }
         }
       }
@@ -63,7 +63,6 @@ pub fn variables(login: &str, after: Option<&str>) -> serde_json::Value {
         "login": login,
         "after": after,
         "pageSize": PAGE_SIZE,
-        "assetPageSize": ASSET_PAGE_SIZE,
     })
 }
 
@@ -206,19 +205,6 @@ struct ReleaseConnection {
 struct ReleaseNode {
     tag_name: String,
     published_at: Option<Timestamp>,
-    release_assets: AssetConnection,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AssetConnection {
-    nodes: Vec<AssetNode>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AssetNode {
-    download_count: u64,
 }
 
 /// A fork and the parent ref it should be compared against.
@@ -311,12 +297,6 @@ impl From<RepositoryNode> for RemoteRepo {
             .map(|release| Release {
                 tag: release.tag_name,
                 published: release.published_at,
-                downloads: release
-                    .release_assets
-                    .nodes
-                    .iter()
-                    .map(|asset| asset.download_count)
-                    .sum(),
             });
 
         Self {

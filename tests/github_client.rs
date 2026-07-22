@@ -87,8 +87,7 @@ async fn reads_every_field_a_repository_reports() {
         "releases": {
             "nodes": [{
                 "tagName": "v1.2.3",
-                "publishedAt": "2026-07-01T00:00:00Z",
-                "releaseAssets": { "nodes": [{ "downloadCount": 7 }, { "downloadCount": 8 }] }
+                "publishedAt": "2026-07-01T00:00:00Z"
             }]
         }
     });
@@ -136,8 +135,9 @@ async fn reads_every_field_a_repository_reports() {
 
     assert_eq!(release.tag, "v1.2.3");
     assert_eq!(
-        release.downloads, 15,
-        "downloads must be summed across every asset"
+        release.published.map(|published| published.to_string()),
+        Some("2026-07-01T00:00:00Z".to_owned()),
+        "the release's publish time must survive"
     );
 }
 

@@ -269,6 +269,20 @@ pub enum GitHubError {
     },
 }
 
+impl GitHubError {
+    /// Whether this is a passing GitHub outage rather than a request the caller
+    /// must correct.
+    ///
+    /// A persistent server error (such as a 502) or an unreachable host clears
+    /// on its own, so a caller holding a cached copy can serve that instead of
+    /// failing. Everything else, a bad token, an unknown account, a rate limit,
+    /// needs the caller to act, so it is not an outage to paper over.
+    #[must_use]
+    pub const fn is_transient_outage(&self) -> bool {
+        matches!(self, Self::Unexpected { .. } | Self::Unreachable { .. })
+    }
+}
+
 /// A human reason for a refused merge-upstream, by status.
 fn sync_failure_message(status: reqwest::StatusCode) -> String {
     match status {
