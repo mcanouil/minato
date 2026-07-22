@@ -7,45 +7,59 @@ body:
   - type: markdown
     attributes:
       value: |
-        Welcome!
+        Thanks for taking the time to report a bug.
 
   - type: checkboxes
     attributes:
-      label: "I Have checked the following"
+      label: Before reporting
       options:
-        - label: I have searched the issue tracker for similar issues
+        - label: I have searched the issue tracker for similar issues.
           required: true
 
   - type: textarea
     attributes:
       label: Bug description
-      description: Description of the bug.
-      placeholder: Please describe the bug here.
+      description: What went wrong, in a sentence or two.
+    validations:
+      required: true
 
   - type: textarea
     attributes:
       label: Steps to reproduce
       description: |
-        Tell us how to reproduce this bug.
-
-  - type: textarea
-    attributes:
-      label: Actual behavior
-      description: Tell us what happens instead.
-
-  - type: textarea
-    attributes:
-      label: Expected behavior
-      description: Tell us what should happen.
-
-  - type: textarea
-    attributes:
-      label: Your environment
-      description: |
-        Please document the IDE (_e.g._ RStudio, Positron, VSCode, NVim), its version, and the operating system you're running (_e.g., MacOS Ventura 13.4, Windows 11, Linux Debian 11, _etc._).
+        The commands you ran, and how your remotes or configuration were set up.
       placeholder: |
-        - IDE: RStudio 2023.03.1+446 | VSCode | Positron
-        - OS: MacOS Ventura 13.4 | Windows | Ubuntu
+        1. `minato ...`
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected behaviour
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Actual behaviour
+      description: What happened instead, including any error output.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Environment
+      description: |
+        Run `minato --version` and `git --version`, and note your operating system.
+        `minato` shells out to `git`, so the `git` version and how your remotes are configured are often relevant.
+      placeholder: |
+        - minato: 0.1.0
+        - git: 2.45.0
+        - OS: macOS 15.0 | Windows 11 | Ubuntu 24.04
+    validations:
+      required: true
 
   - type: markdown
     attributes:
