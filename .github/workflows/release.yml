@@ -331,7 +331,7 @@ jobs:
             echo
             echo "- Tag: \`${VERSION}\`"
             echo "- Release: ${URL}"
-            echo "- Assets: five platform archives, each carrying the binary, README, LICENSE, and changelog."
+            echo "- Assets: five platform archives, each carrying the binary alone, plus SHA256SUMS."
           } >> "${GITHUB_STEP_SUMMARY}"
 
   pages:

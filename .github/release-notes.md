@@ -46,6 +46,17 @@ git clone https://github.com/mcanouil/minato && cd minato
 cargo install --path .
 ```
 
+### In a devcontainer
+
+No host toolchain is needed beyond Docker.
+The bundled `.devcontainer/` carries Rust, `git`, `gh`, `jq`, and `kata`.
+
+```bash
+git clone https://github.com/mcanouil/minato && cd minato
+devcontainer up --workspace-folder .
+devcontainer exec --workspace-folder . cargo install --path .
+```
+
 ## Verify what you downloaded
 
 Beyond the checksum, every archive carries build provenance, so you can confirm it came from this repository's workflow and not from somewhere else:
