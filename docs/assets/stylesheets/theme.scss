@@ -54,8 +54,9 @@ $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, mon
 // ===========================================================================
 // COLOUR TOKENS (per colour-scheme)
 // ===========================================================================
-// The page tokens follow the scheme via [data-bs-theme]. The navbar tokens do
-// not: the navbar and footer are `background: dark` in both schemes, so their
+// The page tokens follow the scheme via .quarto-dark (Quarto's body class). The
+// navbar tokens do not: the navbar and footer are `background: dark` in both
+// schemes, so their
 // pills, the widget menu, and the tooltips must keep the dark surface whichever
 // way the page is set.
 
@@ -83,7 +84,7 @@ $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, mon
   --mn-navbar-border: rgb(230 237 243 / 0.16);
 }
 
-[data-bs-theme="dark"] {
+.quarto-dark {
   color-scheme: dark;
   --mn-accent: #4fb3c4;
   --mn-accent-soft: rgb(79 179 196 / 0.16);
@@ -563,7 +564,7 @@ $icon-moon: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" widt
 
 // Quarto hard-codes #dee2e6 on the panel's left/right/bottom edges, which does
 // not adapt to dark; re-derive them from body-mix() so all four edges match.
-[data-bs-theme] .panel-tabset > .tab-content {
+html .panel-tabset > .tab-content {
   border-color: body-mix(85%);
 }
 
@@ -589,19 +590,21 @@ $icon-moon: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" widt
 // ===========================================================================
 // CODE
 // ===========================================================================
-// Quarto bakes a fixed grey into div.sourceCode. The [data-bs-theme] prefix
-// (always on <html>) raises specificity so these win, and body-mix() derives
-// the surface from the live theme colours, correct in both schemes. Token
-// colours stay with the github-light / github-dark highlighting themes.
+// Quarto bakes a fixed grey into div.sourceCode. Quarto marks the scheme with
+// body.quarto-dark / .quarto-light and swaps the whole stylesheet bundle, so an
+// html prefix (not the never-set data-bs-theme) is what raises specificity over
+// Quarto's rule; body-mix() derives the surface from the per-bundle theme
+// colours, correct in both schemes. Token colours stay with the
+// github-light / github-dark highlighting themes.
 
-[data-bs-theme] div.sourceCode,
-[data-bs-theme] pre:not(.sourceCode) {
+html div.sourceCode,
+html pre:not(.sourceCode) {
   background-color: body-mix(95%);
   border: 1px solid body-mix(85%);
   border-radius: $border-radius-sm;
 }
 
-[data-bs-theme] pre.sourceCode {
+html pre.sourceCode {
   background-color: transparent;
   border: none;
 }
@@ -618,7 +621,7 @@ code:not(.sourceCode):not(pre code) {
 }
 
 // Code Window extension: its style.css uses the CSS system colour `Canvas`,
-// which follows the OS scheme rather than the [data-bs-theme] toggle. Re-skin
+// which follows the OS scheme rather than the active colour-scheme bundle. Re-skin
 // the container and title bar with body-mix() so the block follows the page
 // scheme. A leading `div` keeps these authoritative over the extension's
 // class-only rules regardless of load order.
