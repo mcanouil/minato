@@ -20,13 +20,15 @@ website:
   open-graph: true
   page-navigation: true
   back-to-top-navigation: true
+  llms-txt: true
   search:
     location: navbar
     type: overlay
 
   navbar:
-    title: "minato"
+    title: "Minato"
     background: dark
+    foreground: light
     search: true
     left:
       - text: "{{< iconify octicon:rocket-16 title='Get started' label='Get started' >}} Get started"
@@ -76,6 +78,7 @@ format:
     toc-depth: 3
     code-copy: true
     code-overflow: wrap
+    anchor-sections: true
     link-external-newwindow: true
     grid:
       sidebar-width: 280px
@@ -88,6 +91,7 @@ format:
       # tooltip passes have run over the original markup.
       - assets/scripts/current-year.html
       - assets/scripts/external-links.html
+      - assets/scripts/ordinal-dates.html
       - assets/scripts/a11y-fixes.html
       - assets/scripts/navbar-tooltips.html
       - assets/scripts/github-widget.html
