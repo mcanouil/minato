@@ -7,12 +7,6 @@ It then offers safe, scriptable actions to close the gap: clone what is missing,
 
 GitHub is the only supported provider for now.
 
-## Status
-
-Early development.
-The read-only commands below work; nothing yet clones, fetches, or updates anything.
-Progress is tracked in the local [kata](https://github.com/kenn-io/kata) ledger (`kata list`).
-
 ## Configuration
 
 Configuration is TOML at `~/.config/minato/minato.toml`, or wherever `MINATO_CONFIG` points.
