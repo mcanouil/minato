@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
 - fix: list each account once when a login appears under both `users` and `orgs` or in a different case, so repositories are no longer fetched, reported, and cloned twice (#44).
 - fix: apply `--owner` on `list` and `sync-fork`, which previously ignored it (#50).
 - fix: report a persistent server error or an unreachable host as such when listing gives up, instead of always calling it a rate limit (#49).
+- fix: in the TUI, clear a status message on the next key so the key hints return, refresh the table after a fetch or update, and open the screen before the first scan so it no longer appears to hang on start (#54).
 - fix: report a clone the scan cannot read as a failure rather than dropping it, so its remote is no longer mislabelled "not backed up" (#48).
 - fix: give each process its own cache temporary file, so concurrent runs writing the same key cannot publish a torn entry (#47).
 - fix: reject a `move --to-group` name that is not a plain directory (empty, `.`, `..`, or containing a path separator), so a clone cannot be moved outside its root (#46).

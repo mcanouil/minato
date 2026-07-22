@@ -570,13 +570,11 @@ async fn tui(cli: &Cli) -> Result<Output, CliError> {
         ))
     };
 
-    let rows = build(&gathered.remotes);
-
-    // Reloading rescans the disk. It deliberately does not refetch: asking the
+    // The first paint, a reload, and the refresh after an action all rescan the
+    // disk through this closure. It deliberately does not refetch: asking the
     // provider again is what `--refresh` is for, and a keystroke should not
     // spend someone's rate limit.
-    crate::tui::run(rows, || build(&gathered.remotes))
-        .map_err(|source| CliError::Terminal { source })?;
+    crate::tui::run(|| build(&gathered.remotes)).map_err(|source| CliError::Terminal { source })?;
 
     Ok(String::new().into())
 }
