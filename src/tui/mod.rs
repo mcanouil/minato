@@ -15,10 +15,24 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState};
 
-use crate::actions::{self, Mode};
+use crate::actions;
 use crate::compare::{Comparison, State};
 
 pub use app::{App, Sort};
+
+/// Which action a key asked for.
+///
+/// Public so the caller can supply the dispatcher that owns the clone
+/// destination and the configuration, which this layer does not hold.
+#[derive(Debug)]
+pub enum Action {
+    /// Fetch the highlighted clone.
+    Fetch,
+    /// Fast-forward the highlighted clone.
+    Update,
+    /// Clone the highlighted repository.
+    Clone,
+}
 
 /// What the browser wants doing after a key.
 enum Step {
@@ -35,13 +49,17 @@ enum Step {
 /// Runs the browser until the user leaves.
 ///
 /// `load` rebuilds the comparison from disk and cache, so this module does not
-/// need to know how one is produced. It is called for the first paint, for a
-/// reload, and to refresh after an action.
+/// need to know how one is produced; it is called for the first paint, for a
+/// reload, and to refresh after an action. `apply` carries out an action on one
+/// repository, so the clone destination and configuration stay with the caller.
 ///
 /// # Errors
 ///
 /// Returns an error when the terminal cannot be driven.
-pub fn run(mut load: impl FnMut() -> Vec<Comparison>) -> io::Result<()> {
+pub fn run(
+    mut load: impl FnMut() -> Vec<Comparison>,
+    mut apply: impl FnMut(&Action, &Comparison) -> actions::Summary,
+) -> io::Result<()> {
     // Without a terminal there is nothing to draw on. Every action offered
     // here is also a command, so saying so is more useful than failing
     // obscurely part-way through setting up a screen that cannot exist.
@@ -77,7 +95,7 @@ pub fn run(mut load: impl FnMut() -> Vec<Comparison>) -> io::Result<()> {
                 app.set_message("Reloaded.");
             }
             Ok(Step::Act(action)) => {
-                let (message, ran) = act(&app, &action);
+                let (message, ran) = act(&app, &action, &mut apply);
                 // Rebuild so the acted repository's new state shows at once,
                 // then restore the result, which the rebuild would otherwise
                 // have cleared.
@@ -135,6 +153,7 @@ fn handle_event(app: &mut App) -> io::Result<Step> {
         KeyCode::Char('/') => app.start_search(),
         KeyCode::Char('s') => app.cycle_sort(),
         KeyCode::Char('r') => return Ok(Step::Reload),
+        KeyCode::Char('c') => return Ok(Step::Act(Action::Clone)),
         KeyCode::Char('f') => return Ok(Step::Act(Action::Fetch)),
         KeyCode::Char('u') => return Ok(Step::Act(Action::Update)),
         _ => {}
@@ -143,32 +162,29 @@ fn handle_event(app: &mut App) -> io::Result<Step> {
     Ok(Step::Continue)
 }
 
-/// Which action a key asked for.
-enum Action {
-    Fetch,
-    Update,
-}
-
-/// Runs an action on the highlighted repository, through the same function the
-/// command uses.
+/// Runs an action on the highlighted repository, through `apply`, which the
+/// caller wires to the same functions the commands use.
 ///
-/// Returns the result message and whether an action actually ran, so the caller
-/// knows whether the table is worth rebuilding.
-fn act(app: &App, action: &Action) -> (String, bool) {
+/// Returns the result message and whether anything changed, so the caller knows
+/// whether the table is worth rebuilding.
+fn act(
+    app: &App,
+    action: &Action,
+    apply: &mut impl FnMut(&Action, &Comparison) -> actions::Summary,
+) -> (String, bool) {
     let Some(current) = app.current() else {
         return ("Nothing selected.".to_owned(), false);
     };
 
-    let selection = [current.clone()];
-
-    let summary = match action {
-        Action::Fetch => actions::fetch_all(&selection, Mode::Execute),
-        Action::Update => actions::update_all(&selection, Mode::Execute),
-    };
+    let summary = apply(action, current);
 
     let Some(report) = summary.reports.first() else {
         return ("Nothing to do for that repository.".to_owned(), false);
     };
+
+    // Only a change is worth a rebuild; a skipped or failed action left the disk
+    // as it was.
+    let ran = matches!(report.outcome, actions::Outcome::Done { .. });
 
     let message = match &report.outcome {
         actions::Outcome::Done { detail } => format!("Done: {detail}"),
@@ -177,7 +193,7 @@ fn act(app: &App, action: &Action) -> (String, bool) {
         actions::Outcome::Failed { error } => format!("Failed: {error}"),
     };
 
-    (message, true)
+    (message, ran)
 }
 
 /// Draws the whole screen.
@@ -257,7 +273,7 @@ fn draw(frame: &mut Frame, app: &App) {
         ))
     } else {
         Line::from(Span::styled(
-            "j/k move  / search  s sort  f fetch  u update  r reload  q quit",
+            "j/k move  / search  s sort  c clone  f fetch  u update  r reload  q quit",
             Style::default().fg(Color::DarkGray),
         ))
     };
@@ -436,6 +452,62 @@ mod rendering {
         let rendered = screen(&app);
         assert!(rendered.contains("q quit"), "{rendered}");
         assert!(!rendered.contains("Done: fast-forward"), "{rendered}");
+    }
+
+    #[test]
+    fn any_message_reverts_to_the_hints_when_cleared() {
+        let mut app = App::new(rows());
+
+        for message in ["Reloaded.", "Skipped: nope", "Nothing selected."] {
+            app.set_message(message);
+            assert!(screen(&app).contains(message), "{message}");
+
+            app.clear_message();
+            assert!(screen(&app).contains("q quit"), "cleared: {message}");
+        }
+    }
+
+    #[test]
+    fn the_footer_lists_clone_among_the_keys() {
+        assert!(screen(&App::new(rows())).contains("c clone"));
+    }
+
+    #[test]
+    fn a_done_action_reports_it_and_asks_for_a_rebuild() {
+        let app = App::new(rows());
+        let mut apply = |_: &Action, comparison: &Comparison| actions::Summary {
+            reports: vec![actions::Report {
+                id: comparison.id.clone(),
+                path: None,
+                outcome: actions::Outcome::Done {
+                    detail: "clone github:mcanouil/minato".to_owned(),
+                },
+            }],
+        };
+
+        let (message, ran) = act(&app, &Action::Clone, &mut apply);
+
+        assert!(message.starts_with("Done:"), "{message}");
+        assert!(ran, "a change should ask for a rebuild");
+    }
+
+    #[test]
+    fn a_skipped_action_reports_it_without_a_rebuild() {
+        let app = App::new(rows());
+        let mut apply = |_: &Action, _: &Comparison| actions::Summary {
+            reports: vec![actions::Report {
+                id: None,
+                path: None,
+                outcome: actions::Outcome::Skipped {
+                    reason: "no configured root to clone into".to_owned(),
+                },
+            }],
+        };
+
+        let (message, ran) = act(&app, &Action::Clone, &mut apply);
+
+        assert!(message.starts_with("Skipped:"), "{message}");
+        assert!(!ran, "a skip changed nothing, so no rebuild");
     }
 
     #[test]
