@@ -55,7 +55,7 @@ devcontainer up --workspace-folder .
 devcontainer exec --workspace-folder . cargo install --path .
 ```
 
-See the [README](https://github.com/mcanouil/minato#development) for the full setup, including token handling.
+See [`CONTRIBUTING.md`](https://github.com/mcanouil/minato/blob/main/CONTRIBUTING.md) for the full setup, including token handling.
 
 :::
 
