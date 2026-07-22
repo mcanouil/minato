@@ -28,17 +28,20 @@ enum Step {
     Quit,
     /// Rebuild the comparison from disk and cache.
     Reload,
+    /// Run an action on the highlighted repository.
+    Act(Action),
 }
 
 /// Runs the browser until the user leaves.
 ///
-/// `reload` is called when the contents need rebuilding, so this module does
-/// not need to know how a comparison is produced.
+/// `load` rebuilds the comparison from disk and cache, so this module does not
+/// need to know how one is produced. It is called for the first paint, for a
+/// reload, and to refresh after an action.
 ///
 /// # Errors
 ///
 /// Returns an error when the terminal cannot be driven.
-pub fn run(rows: Vec<Comparison>, mut reload: impl FnMut() -> Vec<Comparison>) -> io::Result<()> {
+pub fn run(mut load: impl FnMut() -> Vec<Comparison>) -> io::Result<()> {
     // Without a terminal there is nothing to draw on. Every action offered
     // here is also a command, so saying so is more useful than failing
     // obscurely part-way through setting up a screen that cannot exist.
@@ -50,7 +53,14 @@ pub fn run(rows: Vec<Comparison>, mut reload: impl FnMut() -> Vec<Comparison>) -
     }
 
     let mut terminal = ratatui::try_init()?;
-    let mut app = App::new(rows);
+
+    // Open the screen before scanning, so the terminal appears at once with a
+    // notice rather than staying frozen until the first scan finishes.
+    let mut app = App::new(Vec::new());
+    app.set_message("Loading…");
+    let _ = terminal.draw(|frame| draw(frame, &app));
+    app.replace(load());
+    app.clear_message();
 
     let outcome = loop {
         if let Err(error) = terminal.draw(|frame| draw(frame, &app)) {
@@ -63,8 +73,18 @@ pub fn run(rows: Vec<Comparison>, mut reload: impl FnMut() -> Vec<Comparison>) -
             Ok(Step::Reload) => {
                 app.set_message("Reloading…");
                 let _ = terminal.draw(|frame| draw(frame, &app));
-                app.replace(reload());
+                app.replace(load());
                 app.set_message("Reloaded.");
+            }
+            Ok(Step::Act(action)) => {
+                let (message, ran) = act(&app, &action);
+                // Rebuild so the acted repository's new state shows at once,
+                // then restore the result, which the rebuild would otherwise
+                // have cleared.
+                if ran {
+                    app.replace(load());
+                }
+                app.set_message(message);
             }
             Err(error) => break Err(error),
         }
@@ -84,6 +104,10 @@ fn handle_event(app: &mut App) -> io::Result<Step> {
     if key.kind != KeyEventKind::Press {
         return Ok(Step::Continue);
     }
+
+    // A status message lasts until the next key, then the footer returns to the
+    // key hints.
+    app.clear_message();
 
     // While typing a search, keys are text rather than commands, apart from the
     // two that stop typing.
@@ -111,8 +135,8 @@ fn handle_event(app: &mut App) -> io::Result<Step> {
         KeyCode::Char('/') => app.start_search(),
         KeyCode::Char('s') => app.cycle_sort(),
         KeyCode::Char('r') => return Ok(Step::Reload),
-        KeyCode::Char('f') => act(app, &Action::Fetch),
-        KeyCode::Char('u') => act(app, &Action::Update),
+        KeyCode::Char('f') => return Ok(Step::Act(Action::Fetch)),
+        KeyCode::Char('u') => return Ok(Step::Act(Action::Update)),
         _ => {}
     }
 
@@ -127,13 +151,15 @@ enum Action {
 
 /// Runs an action on the highlighted repository, through the same function the
 /// command uses.
-fn act(app: &mut App, action: &Action) {
-    let Some(current) = app.current().cloned() else {
-        app.set_message("Nothing selected.");
-        return;
+///
+/// Returns the result message and whether an action actually ran, so the caller
+/// knows whether the table is worth rebuilding.
+fn act(app: &App, action: &Action) -> (String, bool) {
+    let Some(current) = app.current() else {
+        return ("Nothing selected.".to_owned(), false);
     };
 
-    let selection = [current];
+    let selection = [current.clone()];
 
     let summary = match action {
         Action::Fetch => actions::fetch_all(&selection, Mode::Execute),
@@ -141,16 +167,17 @@ fn act(app: &mut App, action: &Action) {
     };
 
     let Some(report) = summary.reports.first() else {
-        app.set_message("Nothing to do for that repository.");
-        return;
+        return ("Nothing to do for that repository.".to_owned(), false);
     };
 
-    app.set_message(match &report.outcome {
+    let message = match &report.outcome {
         actions::Outcome::Done { detail } => format!("Done: {detail}"),
         actions::Outcome::Would { detail } => format!("Would {detail}"),
         actions::Outcome::Skipped { reason } => format!("Skipped: {reason}"),
         actions::Outcome::Failed { error } => format!("Failed: {error}"),
-    });
+    };
+
+    (message, true)
 }
 
 /// Draws the whole screen.
@@ -393,6 +420,22 @@ mod rendering {
 
         let rendered = screen(&app);
         assert!(rendered.contains("Done: fast-forward"), "{rendered}");
+        assert!(
+            !rendered.contains("q quit"),
+            "the message replaces the key hints while it is shown:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn clearing_the_message_brings_the_key_hints_back() {
+        let mut app = App::new(rows());
+        app.set_message("Done: fast-forward /code/perso/minato");
+
+        app.clear_message();
+
+        let rendered = screen(&app);
+        assert!(rendered.contains("q quit"), "{rendered}");
+        assert!(!rendered.contains("Done: fast-forward"), "{rendered}");
     }
 
     #[test]

@@ -136,6 +136,11 @@ impl App {
         self.message = Some(message.into());
     }
 
+    /// Clears the message, so the footer returns to the key hints.
+    pub fn clear_message(&mut self) {
+        self.message = None;
+    }
+
     /// Moves the highlight down, stopping at the end rather than wrapping.
     ///
     /// Wrapping would make a long list feel like it had lost your place.
@@ -481,6 +486,18 @@ mod tests {
             (1, 2),
             "the search should still be applied to the new contents"
         );
+    }
+
+    #[test]
+    fn a_message_can_be_set_and_then_cleared() {
+        let mut app = sample();
+        assert_eq!(app.message(), None);
+
+        app.set_message("Done: something");
+        assert_eq!(app.message(), Some("Done: something"));
+
+        app.clear_message();
+        assert_eq!(app.message(), None);
     }
 
     #[test]
