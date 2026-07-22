@@ -10,7 +10,7 @@ lang: en-GB
 date-format: "dddd[, the] Do [of] MMMM, YYYY"
 
 website:
-  title: "minato"
+  title: "Minato"
   description: "Overview and sync of Git repositories across hosting providers."
   site-url: "https://m.canouil.dev/minato"
   repo-url: "https://github.com/mcanouil/minato"
