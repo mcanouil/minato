@@ -570,11 +570,40 @@ async fn tui(cli: &Cli) -> Result<Output, CliError> {
         ))
     };
 
+    // Actions run through the same functions the commands use. Clone goes to the
+    // first configured root under the layout, as `minato clone` does with no
+    // `--into`, so the destination and configuration stay here rather than
+    // leaking into the browser.
+    let clone_root = roots.first().cloned();
+    let apply = |action: &crate::tui::Action, comparison: &Comparison| -> actions::Summary {
+        let selection = [comparison.clone()];
+
+        match action {
+            crate::tui::Action::Fetch => actions::fetch_all(&selection, Mode::Execute),
+            crate::tui::Action::Update => actions::update_all(&selection, Mode::Execute),
+            crate::tui::Action::Clone => clone_root.as_ref().map_or_else(
+                || actions::Summary {
+                    reports: vec![actions::Report {
+                        id: comparison.id.clone(),
+                        path: None,
+                        outcome: actions::Outcome::Skipped {
+                            reason: "no configured root to clone into".to_owned(),
+                        },
+                    }],
+                },
+                |root| {
+                    actions::clone_missing(&selection, root, &config.local, false, Mode::Execute)
+                },
+            ),
+        }
+    };
+
     // The first paint, a reload, and the refresh after an action all rescan the
-    // disk through this closure. It deliberately does not refetch: asking the
-    // provider again is what `--refresh` is for, and a keystroke should not
-    // spend someone's rate limit.
-    crate::tui::run(|| build(&gathered.remotes)).map_err(|source| CliError::Terminal { source })?;
+    // disk through `build`. It deliberately does not refetch: asking the provider
+    // again is what `--refresh` is for, and a keystroke should not spend
+    // someone's rate limit.
+    crate::tui::run(|| build(&gathered.remotes), apply)
+        .map_err(|source| CliError::Terminal { source })?;
 
     Ok(String::new().into())
 }
