@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- change: shrink the repository listing query, halving the page size and no longer counting release downloads, so GitHub is less likely to answer an account with a 502; the download count is dropped from `minato list` as a result.
+
+### Bug Fixes
+
+- fix: serve the last cached repositories with a warning when GitHub is briefly unavailable while listing, so a passing 502 or unreachable host no longer fails a whole run.
+
 ## 0.1.0 (2026-07-22)
 
 First public release of Minato.

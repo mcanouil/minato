@@ -9,17 +9,17 @@ mod render;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 use serde::Serialize;
 use std::fmt::Write as _;
 
 use crate::actions::{self, Mode};
-use crate::cache::Cache;
+use crate::cache::{Cache, Cached};
 use crate::compare::{self, Comparison, State, TrackedOwners};
 use crate::config::{self, Config};
 use crate::filter::{self, Filter};
 use crate::github::auth;
-use crate::github::{Account, GitHubClient};
+use crate::github::{Account, GitHubClient, GitHubError};
 use crate::model::{Provider, RemoteRepo};
 use crate::scan;
 
@@ -820,6 +820,47 @@ fn accounts_of(github: &config::GitHub) -> Vec<Account> {
         .collect()
 }
 
+/// What an account's fetch yielded, once cache fallback has been considered.
+#[derive(Debug)]
+enum Served {
+    /// The provider answered, and this is what it said.
+    Fresh(Vec<RemoteRepo>),
+
+    /// The provider was briefly unavailable, so a cached copy is shown instead.
+    Stale {
+        /// The repositories, from cache.
+        data: Vec<RemoteRepo>,
+        /// How old that cache is.
+        age: SignedDuration,
+        /// The outage that forced the fallback, to warn the user about.
+        outage: GitHubError,
+    },
+}
+
+/// Decides what to do with an account whose fetch has finished.
+///
+/// A passing GitHub outage falls back to any cached copy rather than failing
+/// the whole run, so one flaky account does not hide every other. Every other
+/// error, and a transient outage with no cache to fall back on, propagates.
+fn serve(
+    fetched: Result<Vec<RemoteRepo>, GitHubError>,
+    cached: Option<Cached<Vec<RemoteRepo>>>,
+    now: Timestamp,
+) -> Result<Served, GitHubError> {
+    match fetched {
+        Ok(repositories) => Ok(Served::Fresh(repositories)),
+        Err(outage) if outage.is_transient_outage() => match cached {
+            Some(cached) => Ok(Served::Stale {
+                age: cached.age(now),
+                data: cached.data,
+                outage,
+            }),
+            None => Err(outage),
+        },
+        Err(error) => Err(error),
+    }
+}
+
 /// Loads configuration, then fills in the remote side from cache or provider.
 async fn gather(cli: &Cli, paths: &Paths, config: &Config) -> Result<Gathered, CliError> {
     let accounts = config
@@ -843,10 +884,18 @@ async fn gather(cli: &Cli, paths: &Paths, config: &Config) -> Result<Gathered, C
     for account in &accounts {
         let key = format!("github-{}", account.login());
 
-        if !cli.refresh
-            && let Some(cached) = paths.cache.load::<Vec<RemoteRepo>>(&key)
-            && !cached.is_stale(now, config.cache.ttl)
-        {
+        // The cache is loaded whether or not it is fresh: a fresh entry is
+        // served straight away, and a stale one is kept in hand in case the
+        // fetch below runs into a GitHub outage.
+        let cached = paths.cache.load::<Vec<RemoteRepo>>(&key);
+
+        let is_fresh = !cli.refresh
+            && cached
+                .as_ref()
+                .is_some_and(|cached| !cached.is_stale(now, config.cache.ttl));
+
+        if is_fresh {
+            let cached = cached.expect("a fresh entry was just loaded");
             let age = cached.age(now);
             staleness = Some(staleness.map_or(age, |worst| worst.max(age)));
             remotes.extend(cached.data);
@@ -857,9 +906,21 @@ async fn gather(cli: &Cli, paths: &Paths, config: &Config) -> Result<Gathered, C
         // fetching, so a fully cached run never asks for a token.
         let client = client_or_init(&mut client)?;
 
-        let fetched = client.repositories(account).await?;
-        paths.cache.store(&key, &fetched, now)?;
-        remotes.extend(fetched);
+        match serve(client.repositories(account).await, cached, now)? {
+            Served::Fresh(fetched) => {
+                paths.cache.store(&key, &fetched, now)?;
+                remotes.extend(fetched);
+            }
+            Served::Stale { data, age, outage } => {
+                eprintln!(
+                    "warning: {outage}\nShowing cached repositories for `{}` from {} ago instead.",
+                    account.login(),
+                    describe_age(age)
+                );
+                staleness = Some(staleness.map_or(age, |worst| worst.max(age)));
+                remotes.extend(data);
+            }
+        }
     }
 
     Ok(Gathered {
@@ -892,7 +953,6 @@ async fn list(cli: &Cli) -> Result<String, CliError> {
         "STARS",
         "ISSUES",
         "PRS",
-        "DOWNLOADS",
         "LICENCE",
         "PUSHED",
     ]);
@@ -908,10 +968,6 @@ async fn list(cli: &Cli) -> Result<String, CliError> {
             metadata.stars.to_string(),
             metadata.open_issues.to_string(),
             metadata.open_pull_requests.to_string(),
-            metadata
-                .latest_release
-                .as_ref()
-                .map_or_else(|| "-".to_owned(), |release| release.downloads.to_string()),
             metadata.licence.clone().unwrap_or_else(|| "-".to_owned()),
             metadata.last_pushed.map_or_else(
                 || "-".to_owned(),
@@ -1115,6 +1171,89 @@ mod tests {
             assert!(parsed.include_forks);
             assert!(parsed.include_external);
         }
+    }
+
+    fn cached_repositories(names: &[&str], fetched_at: Timestamp) -> Cached<Vec<RemoteRepo>> {
+        Cached {
+            version: crate::cache::SCHEMA_VERSION,
+            fetched_at,
+            data: names
+                .iter()
+                .map(|name| RemoteRepo {
+                    id: crate::model::RepoId::new(Provider::GitHub, "mcanouil", name),
+                    default_branch: Some("main".to_owned()),
+                    is_private: false,
+                    is_archived: false,
+                    is_fork: false,
+                    upstream: None,
+                    metadata: crate::model::Metadata::default(),
+                })
+                .collect(),
+        }
+    }
+
+    fn now() -> Timestamp {
+        "2026-07-20T12:00:00Z".parse().expect("a timestamp")
+    }
+
+    #[test]
+    fn serve_shows_a_successful_fetch_without_touching_the_cache() {
+        let cached = cached_repositories(&["stale"], now() - SignedDuration::from_hours(1));
+
+        let served = serve(Ok(Vec::new()), Some(cached), now()).expect("a successful fetch");
+
+        assert!(
+            matches!(served, Served::Fresh(repositories) if repositories.is_empty()),
+            "a fetch that succeeds must be shown as-is, never the cache"
+        );
+    }
+
+    #[test]
+    fn serve_falls_back_to_cache_when_github_has_a_passing_outage() {
+        let fetched_at = now() - SignedDuration::from_hours(1);
+        let cached = cached_repositories(&["one"], fetched_at);
+
+        let outage = Err(GitHubError::Unexpected {
+            account: "mcanouil".to_owned(),
+            status: 502,
+        });
+
+        let Served::Stale { data, age, .. } =
+            serve(outage, Some(cached), now()).expect("a fallback rather than a failure")
+        else {
+            panic!("a 502 with a warm cache should serve the cache");
+        };
+
+        assert_eq!(data.len(), 1, "the cached repositories must be served");
+        assert_eq!(
+            age,
+            SignedDuration::from_hours(1),
+            "the fallback must report how old the served data is"
+        );
+    }
+
+    #[test]
+    fn serve_fails_on_an_outage_when_there_is_nothing_cached() {
+        let outage = Err(GitHubError::Unexpected {
+            account: "mcanouil".to_owned(),
+            status: 502,
+        });
+
+        let error = serve(outage, None, now()).expect_err("no cache means no fallback");
+
+        assert!(matches!(error, GitHubError::Unexpected { status: 502, .. }));
+    }
+
+    #[test]
+    fn serve_never_papers_over_an_error_the_user_must_fix() {
+        let cached = cached_repositories(&["one"], now() - SignedDuration::from_hours(1));
+
+        let rejected = Err(GitHubError::Unauthorised { token_source: None });
+
+        let error = serve(rejected, Some(cached), now())
+            .expect_err("a rejected token is not an outage to hide behind stale data");
+
+        assert!(matches!(error, GitHubError::Unauthorised { .. }));
     }
 
     #[test]
