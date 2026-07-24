@@ -44,10 +44,10 @@ website:
         href: changelog.qmd
         aria-label: "Changelog"
     right:
-      # Replaced at load by assets/scripts/github-widget.html with a button
+      # Replaced at load by the gitlink extension's navbar widget: a button
       # showing live star and fork counts and a repository menu.
       - text: "{{< iconify octicon:mark-github-16 title='GitHub' label='GitHub' >}}"
-        href: "#github-widget"
+        href: "#gitlink-widget"
         aria-label: "GitHub"
 
   page-footer:
@@ -87,20 +87,34 @@ format:
     include-before-body:
       - assets/scripts/skip-link.html
     include-after-body:
-      # The widget swaps its navbar item last, after the accessibility and
-      # tooltip passes have run over the original markup.
       - assets/scripts/current-year.html
       - assets/scripts/external-links.html
       - assets/scripts/ordinal-dates.html
       - assets/scripts/a11y-fixes.html
       - assets/scripts/navbar-tooltips.html
-      - assets/scripts/github-widget.html
 
 filters:
   - at: pre-quarto
     path: code-window
+  - at: post-quarto
+    path: gitlink
 
 extensions:
+  gitlink:
+    # Widget only: the platform and repository come from `website.repo-url`,
+    # and in-text reference rewriting stays off.
+    enabled: false
+    widget:
+      enabled: true
+      extra-links:
+        - text: "Ideas"
+          href: "/discussions/categories/ideas"
+          icon: discussion
+        - text: "Q&A"
+          href: "/discussions/categories/q-a"
+          icon: question
+      sponsor: mcanouil
+      style-navbar-tools: true
   code-window:
     style: "macos"
     # Blocks here are either a command to run or the output it produced, and
