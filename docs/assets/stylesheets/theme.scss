@@ -355,12 +355,17 @@ $icon-moon: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" widt
 .navbar .quarto-color-scheme-toggle,
 .sidebar-navigation .quarto-color-scheme-toggle,
 .top-right.quarto-color-scheme-toggle {
+  // Clear Quarto's default toggle-switch background-image (same specificity, so
+  // this wins on order); otherwise its glyph paints through and is clipped by
+  // the mask, leaving a shape that does not fill.
   &:not(.alternate) .bi::before {
+    background-image: none;
     mask-image: $icon-sun;
     -webkit-mask-image: $icon-sun;
   }
 
   &.alternate .bi::before {
+    background-image: none;
     mask-image: $icon-moon;
     -webkit-mask-image: $icon-moon;
   }
