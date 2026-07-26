@@ -3,6 +3,7 @@ title: "Page not found"
 description: "That address is not part of the Minato documentation, or it has moved since it was linked."
 toc: false
 sidebar: false
+canonical-url: false
 ---
 
 ::: {.atelier-404}
