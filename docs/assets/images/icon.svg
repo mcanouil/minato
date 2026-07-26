@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  @license MIT
+  @copyright 2026 Mickaël Canouil
+  @author Mickaël Canouil
+
+  A harbour seen from above: the basin wall opens to the north-east for the
+  harbour mouth, and a single repository sits moored at the centre. Geometry is
+  snapped to the 32-unit grid so the mark stays crisp at 16x16, and the base
+  colours are presentation attributes so renderers that ignore CSS still draw
+  the light variant; the style block only carries the dark-scheme override.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-labelledby="minato-icon-title">
+  <title id="minato-icon-title">Minato</title>
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .basin { stroke: #4FB3C4; }
+      .moored { fill: #F0A555; }
+    }
+  </style>
+  <path class="basin" d="M26.337 12.238A11 11 0 1 1 19.762 5.663" fill="none" stroke="#0E6E7D" stroke-width="4" stroke-linecap="round"/>
+  <circle class="moored" cx="16" cy="16" r="4" fill="#C2661B"/>
+</svg>

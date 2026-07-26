@@ -1,35 +1,30 @@
 project:
-  type: website
-  output-dir: _site
+  # Names the atelier extension, which contributes the website project type and
+  # the defaults that go with it, including `format: atelier-html`.
+  type: atelier
   resources:
-    - assets/scripts/
+    - assets/images/
+    - favicon.ico
+    - site.webmanifest
     # Published verbatim so `curl -fsSL .../install.sh | bash` works.
     - install.sh
-
-lang: en-GB
-date-format: "dddd[, the] Do [of] MMMM, YYYY"
 
 website:
   title: "Minato"
   description: "Overview and sync of Git repositories across hosting providers."
-  site-url: "https://m.canouil.dev/minato"
+  site-url: &site-url "https://m.canouil.dev/minato"
   repo-url: "https://github.com/mcanouil/minato"
-  repo-actions: [edit, issue]
-  repo-link-target: _blank
-  repo-link-rel: noopener noreferrer
-  open-graph: true
-  page-navigation: true
-  back-to-top-navigation: true
-  llms-txt: true
-  search:
-    location: navbar
-    type: overlay
+  favicon: favicon.ico
+  image: /assets/images/og-image.png
+  image-alt: &image-alt >-
+    The Minato mark, a teal harbour wall open to the north-east with an amber
+    mooring at its centre, on a rounded pale tile beside the name Minato and
+    the line "A harbour for your repositories", against deep harbour blue.
+  twitter-card:
+    image-alt: *image-alt
 
   navbar:
     title: "Minato"
-    background: dark
-    foreground: light
-    search: true
     left:
       - text: "{{< iconify octicon:rocket-16 title='Get started' label='Get started' >}} Get started"
         href: get-started/index.qmd
@@ -51,9 +46,6 @@ website:
         aria-label: "GitHub"
 
   page-footer:
-    border: true
-    background: dark
-    foreground: light
     left: |
       Powered by [{{< iconify simple-icons:quarto title="Quarto Logo" label="Quarto Logo" >}} Quarto](https://quarto.org).
     center: |
@@ -64,34 +56,15 @@ website:
 brand: _brand.yml
 
 format:
-  html:
+  # The atelier extension carries the house style and the shared behaviour;
+  # only what is minato's own is set here. Its theme list is `brand` plus the
+  # extension's own stylesheet, and Quarto concatenates lists across levels, so
+  # naming a sheet here layers it on top rather than replacing them.
+  atelier-html:
     theme:
       light: &theme
-        - brand
         - assets/stylesheets/theme.scss
       dark: *theme
-    respect-user-color-scheme: true
-    syntax-highlighting:
-      light: github-light
-      dark: github-dark
-    toc: true
-    toc-depth: 3
-    code-copy: true
-    code-overflow: wrap
-    anchor-sections: true
-    link-external-newwindow: true
-    grid:
-      sidebar-width: 280px
-      body-width: 1000px
-      margin-width: 260px
-    include-before-body:
-      - assets/scripts/skip-link.html
-    include-after-body:
-      - assets/scripts/current-year.html
-      - assets/scripts/external-links.html
-      - assets/scripts/ordinal-dates.html
-      - assets/scripts/a11y-fixes.html
-      - assets/scripts/navbar-tooltips.html
 
 filters:
   - at: pre-quarto
@@ -100,6 +73,18 @@ filters:
     path: gitlink
 
 extensions:
+  atelier:
+    # The filter builds `og:url` and the canonical link from this, and Quarto
+    # builds the sitemap from `website.site-url`; the anchor keeps them equal.
+    site-url: *site-url
+    # Site-root-relative, with the leading slash Quarto needs in order to
+    # rewrite each href to the page's own offset.
+    icon: /assets/images/icon.svg
+    apple-touch-icon: /assets/images/apple-touch-icon.png
+    manifest: /site.webmanifest
+    theme-color:
+      light: "#F7F9FB"
+      dark: "#0C1620"
   gitlink:
     # Widget only: the platform and repository come from `website.repo-url`,
     # and in-text reference rewriting stays off.

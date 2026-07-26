@@ -3,29 +3,13 @@
 // @copyright 2026 Mickaël Canouil
 // @author Mickaël Canouil
 
-// Adapted from quarto-wizard's stylesheet: colours are driven at runtime by CSS
-// custom properties so a single sheet is correct in both Quarto light and dark
-// themes, and code surfaces come from body-mix() rather than a hard-coded second
-// palette. Fonts come from _brand.yml. The wizard's night-sky animation is left
-// out; minato keeps its own harbour hero.
+// The house style, and everything that is not specific to this site, ships
+// with the atelier extension and is layered beneath this sheet. What remains
+// here is minato's own: the harbour palette the shared navbar tokens are
+// painted with, and the landing page.
 
 $headings-font-weight: 700;
-$border-radius: 0.5rem;
-$border-radius-sm: 0.375rem;
-$border-radius-lg: 0.75rem;
-$enable-smooth-scroll: true;
-
 $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace !default;
-
-/*-- scss:functions --*/
-
-// Mix the theme's own background and foreground. Because brand injects different
-// $body-bg / $body-color into the light and dark compiles, body-mix(95%)
-// resolves to the correct per-mode surface from a single source of truth: a
-// hair off the page background, never Quarto's hard-coded grey.
-@function body-mix($weight) {
-  @return mix($body-bg, $body-color, $weight);
-}
 
 /*-- scss:rules --*/
 
@@ -34,9 +18,8 @@ $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, mon
 // ===========================================================================
 // The page tokens follow the scheme via .quarto-dark (Quarto's body class). The
 // navbar tokens do not: the navbar and footer are `background: dark` in both
-// schemes, so their
-// pills, the widget menu, and the tooltips must keep the dark surface whichever
-// way the page is set.
+// schemes, so atelier pins them, and repainting its tokens with the harbour
+// palette is what makes those bars minato's rather than the shared default.
 
 :root {
   color-scheme: light;
@@ -54,12 +37,15 @@ $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, mon
   --mn-warning: #c2661b;
   --mn-danger: #b23a2b;
 
-  // Navbar surface: identical in both compiled stylesheets.
-  --mn-navbar-bg: #0c1620;
-  --mn-navbar-fg: #e6edf3;
-  --mn-navbar-accent: #4fb3c4;
-  --mn-navbar-accent-soft: rgb(79 179 196 / 0.18);
-  --mn-navbar-border: rgb(230 237 243 / 0.16);
+  // Atelier's dark-pinned surface, in harbour colours: identical in both
+  // compiled stylesheets.
+  --atelier-navbar-bg: #0c1620;
+  --atelier-navbar-surface: #132430;
+  --atelier-navbar-fg: #e6edf3;
+  --atelier-navbar-muted: #8fa9b8;
+  --atelier-navbar-accent: #4fb3c4;
+  --atelier-navbar-accent-soft: rgb(79 179 196 / 0.18);
+  --atelier-navbar-border: rgb(230 237 243 / 0.16);
 }
 
 .quarto-dark {
@@ -79,37 +65,8 @@ $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, mon
 }
 
 // ===========================================================================
-// BASE
-// ===========================================================================
-
-a:focus-visible,
-button:focus-visible,
-.btn:focus-visible,
-.nav-link:focus-visible {
-  outline: 2px solid var(--mn-accent);
-  outline-offset: 2px;
-  border-radius: 2px;
-}
-
-// The hero background bleeds to 100vw, a hair wider than the content area when a
-// vertical scrollbar is present. `clip` absorbs the overhang without turning the
-// body into a scroll container, so sticky navigation keeps working.
-body {
-  overflow-x: clip;
-}
-
-// ===========================================================================
 // TYPOGRAPHY
 // ===========================================================================
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  letter-spacing: 0.012em;
-}
 
 h1.title,
 header#title-block-header h1.title {
@@ -118,14 +75,6 @@ header#title-block-header h1.title {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: 0.02em;
-}
-
-// Quarto renders dates as plain text, so the ordinal-dates script wraps the
-// suffix in <sup class="ordinal-suffix">; style it as a small superscript.
-.ordinal-suffix {
-  font-size: 0.55em;
-  font-style: italic;
-  vertical-align: super;
 }
 
 // ===========================================================================
@@ -144,16 +93,18 @@ header#title-block-header h1.title {
 }
 
 // ===========================================================================
-// NAVBAR + FOOTER (the night palette in both schemes via background: dark)
+// CODE
 // ===========================================================================
+// Atelier gives inline code a neutral surface derived from the page; tint it
+// with the accent instead, which is how the states and the landing page read.
 
-// A border and a faint shadow delimit the navbar from the content beneath it,
-// which matters most in dark mode where the navbar and the page background are
-// close in colour. Adapted from quarto-wizard.
-.navbar {
-  border-bottom: 1px solid var(--mn-navbar-border);
-  box-shadow: 0 1px 0 rgb(79 179 196 / 0.06);
+code:not(.sourceCode):not(pre code) {
+  background-color: var(--mn-accent-soft);
 }
+
+// ===========================================================================
+// NAVBAR
+// ===========================================================================
 
 .navbar .navbar-brand,
 .navbar-title {
@@ -189,7 +140,7 @@ header#title-block-header h1.title {
   right: 0.5rem;
   bottom: 0.2rem;
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--mn-navbar-accent), transparent);
+  background: linear-gradient(90deg, transparent, var(--atelier-navbar-accent), transparent);
   transform: scaleX(0);
   transition: transform 0.25s ease;
 }
@@ -199,295 +150,33 @@ header#title-block-header h1.title {
   transform: scaleX(1);
 }
 
-// The footer keeps the dark palette in both schemes, matching the navbar, so
-// its links follow the light foreground rather than the page link colour.
-.nav-footer,
-.page-footer {
-  border-top: 1px solid var(--mn-navbar-border);
-  font-size: 0.9rem;
-
-  a {
-    color: var(--mn-navbar-fg);
-    text-decoration: none;
-
-    &:hover,
-    &:focus-visible {
-      color: var(--mn-navbar-accent);
-      text-decoration: underline;
-    }
+// Atelier's collapsed navbar keeps the menu a wrapping row; the links still
+// need their own width and padding to sit in it.
+@media (max-width: 991.98px) {
+  .navbar .navbar-collapse .navbar-nav .nav-link {
+    width: auto;
+    padding-inline: 0.6rem;
   }
-}
-
-// ===========================================================================
-// NAVBAR TOOLS (search, colour-scheme toggle, gitlink widget)
-// ===========================================================================
-// Layout, sizing, and the pill shell for the navbar-right control group ship
-// with the gitlink extension (widget.css and widget-navbar-tools.css via
-// `widget.style-navbar-tools`); these tokens repaint it from the navbar
-// palette, identical in both schemes.
-
-.navbar {
-  --gitlink-widget-border: var(--mn-navbar-border);
-  --gitlink-widget-accent: var(--mn-navbar-accent);
-  --gitlink-widget-accent-soft: var(--mn-navbar-accent-soft);
-  --gitlink-widget-menu-bg: var(--mn-navbar-bg);
-  --gitlink-widget-menu-fg: var(--mn-navbar-fg);
 }
 
 // The widget menu keeps the site glow instead of the extension's default
 // shadow; structure comes from the extension's widget.css.
 body .navbar .gitlink-widget-dropdown {
-  border-radius: $border-radius;
   box-shadow: 0 12px 30px -16px var(--mn-glow);
 }
 
-// Mobile fix (critical). The collapsed navbar-nav is a Bootstrap
-// `.navbar-nav-scroll` region (max-height + overflow-y: auto) that clips the
-// absolute dropdown, so it shows a scrollbar and looks like it will not open.
-// Neutralise it and anchor the menu to the left edge so it stays on screen.
-@media (max-width: 991.98px) {
-  .navbar .navbar-collapse .navbar-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem;
-    width: auto;
-    max-height: none;
-    overflow: visible;
+// ===========================================================================
+// FOOTER
+// ===========================================================================
 
-    .nav-link {
-      width: auto;
-      padding-inline: 0.6rem;
-    }
-  }
-
-  // Below the expand breakpoint Bootstrap forces a native navbar
-  // `.dropdown-menu` to `position: static`, so an open menu flows in-document
-  // and grows the navbar instead of overlaying. Re-anchor it to absolute
-  // against a relative `.nav-item`, the way the custom widget menu already
-  // behaves. Bootstrap's base `z-index: 1000` is kept.
-  .navbar .navbar-collapse .navbar-nav .nav-item.dropdown {
-    position: relative;
-  }
-
-  .navbar .dropdown-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-  }
+.nav-footer,
+.page-footer {
+  font-size: 0.9rem;
 }
 
 // ===========================================================================
-// TOOLTIPS (navbar controls — dark surface in both schemes)
+// TABLES
 // ===========================================================================
-
-.tooltip {
-  --bs-tooltip-bg: var(--mn-navbar-bg);
-  --bs-tooltip-color: var(--mn-navbar-fg);
-  --bs-tooltip-opacity: 1;
-  --bs-tooltip-border-radius: #{$border-radius-sm};
-}
-
-.tooltip .tooltip-inner {
-  border: 1px solid var(--mn-navbar-accent);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-// Tippy theme used by navbar-tooltips.html for the navbar controls.
-.tippy-box[data-theme~="mn"] {
-  background-color: var(--mn-navbar-bg);
-  color: var(--mn-navbar-fg);
-  border: 1px solid var(--mn-navbar-accent);
-  border-radius: $border-radius-sm;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.tippy-box[data-theme~="mn"] .tippy-content {
-  padding: 0.2rem 0.55rem;
-}
-
-// Skip link: visible only when focused.
-.skip-link:focus {
-  position: fixed;
-  top: 0.5rem;
-  left: 0.5rem;
-  z-index: 2000;
-  padding: 0.5rem 0.9rem;
-  border-radius: $border-radius-sm;
-  background-color: var(--mn-accent);
-  color: #f7f9fb;
-  font-weight: 600;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
-}
-
-// ===========================================================================
-// THEME TOGGLE (sun in light scheme, moon in dark scheme)
-// ===========================================================================
-// Quarto renders an empty <i class="bi">; the glyph is a mask-image so it
-// follows currentColor and picks up the pill's hover colour. Taken from
-// quarto-wizard.
-
-$icon-sun: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="black" viewBox="0 0 16 16"><path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>');
-$icon-moon: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="black" viewBox="0 0 16 16"><path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/><path d="M10.794 3.148a.217.217 0 0 1 .412 0l.387 1.162c.173.518.579.924 1.097 1.097l1.162.387a.217.217 0 0 1 0 .412l-1.162.387a1.73 1.73 0 0 0-1.097 1.097l-.387 1.162a.217.217 0 0 1-.412 0l-.387-1.162A1.73 1.73 0 0 0 9.31 6.593l-1.162-.387a.217.217 0 0 1 0-.412l1.162-.387a1.73 1.73 0 0 0 1.097-1.097zM13.863.099a.145.145 0 0 1 .274 0l.258.774c.115.346.386.617.732.732l.774.258a.145.145 0 0 1 0 .274l-.774.258a1.16 1.16 0 0 0-.732.732l-.258.774a.145.145 0 0 1-.274 0l-.258-.774a1.16 1.16 0 0 0-.732-.732l-.774-.258a.145.145 0 0 1 0-.274l.774-.258c.346-.115.617-.386.732-.732z"/></svg>');
-
-.quarto-color-scheme-toggle .bi::before {
-  content: "";
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  vertical-align: -0.125em;
-  background-image: none;
-  background-color: currentcolor;
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-}
-
-// Quarto ships its own glyph at the same specificity, so scope to every place
-// the toggle can render in order to win on order.
-.navbar .quarto-color-scheme-toggle,
-.sidebar-navigation .quarto-color-scheme-toggle,
-.top-right.quarto-color-scheme-toggle {
-  // Clear Quarto's default toggle-switch background-image (same specificity, so
-  // this wins on order); otherwise its glyph paints through and is clipped by
-  // the mask, leaving a shape that does not fill.
-  &:not(.alternate) .bi::before {
-    background-image: none;
-    mask-image: $icon-sun;
-    -webkit-mask-image: $icon-sun;
-  }
-
-  &.alternate .bi::before {
-    background-image: none;
-    mask-image: $icon-moon;
-    -webkit-mask-image: $icon-moon;
-  }
-}
-
-// ===========================================================================
-// PANEL TABSET
-// ===========================================================================
-
-.panel-tabset .nav-tabs {
-  // This line is the panel box's top edge (Quarto leaves .tab-content without a
-  // border-top). --mn-border is too faint in dark, so the top went invisible;
-  // body-mix() matches the code-surface border and the tab-content edges below.
-  border-bottom: 1px solid body-mix(85%);
-  // Bootstrap bakes the active colour to near-black; override the variables so
-  // the tab keeps every other behaviour.
-  --bs-nav-tabs-link-active-color: var(--bs-body-color);
-  --bs-nav-tabs-link-active-bg: transparent;
-  --bs-nav-tabs-link-active-border-color: transparent;
-}
-
-// Quarto hard-codes #dee2e6 on the panel's left/right/bottom edges, which does
-// not adapt to dark; re-derive them from body-mix() so all four edges match.
-html .panel-tabset > .tab-content {
-  border-color: body-mix(85%);
-}
-
-.panel-tabset .nav-tabs .nav-link {
-  color: var(--bs-secondary-color);
-  transition: color 0.15s ease-in-out;
-}
-
-.panel-tabset .nav-tabs .nav-link:hover,
-.panel-tabset .nav-tabs .nav-link:focus {
-  color: var(--mn-accent);
-  border-color: transparent;
-}
-
-.panel-tabset .nav-tabs .nav-link.active {
-  color: var(--bs-body-color);
-  border-color: transparent;
-  border-bottom: 2px solid var(--mn-accent);
-  background: transparent;
-  font-weight: 600;
-}
-
-// ===========================================================================
-// CODE
-// ===========================================================================
-// Quarto bakes a fixed grey into div.sourceCode. Quarto marks the scheme with
-// body.quarto-dark / .quarto-light and swaps the whole stylesheet bundle, so an
-// html prefix (not the never-set data-bs-theme) is what raises specificity over
-// Quarto's rule; body-mix() derives the surface from the per-bundle theme
-// colours, correct in both schemes. Token colours stay with the
-// github-light / github-dark highlighting themes.
-
-html div.sourceCode,
-html pre:not(.sourceCode) {
-  background-color: body-mix(95%);
-  border: 1px solid body-mix(85%);
-  border-radius: $border-radius-sm;
-}
-
-html pre.sourceCode {
-  background-color: transparent;
-  border: none;
-}
-
-code:not(.sourceCode):not(pre code) {
-  color: var(--mn-accent);
-  background-color: var(--mn-accent-soft);
-  padding: 0.1em 0.35em;
-  border-radius: 0.3em;
-}
-
-.code-copy-button {
-  color: var(--mn-accent);
-}
-
-// Code Window extension: its style.css uses the CSS system colour `Canvas`,
-// which follows the OS scheme rather than the active colour-scheme bundle. Re-skin
-// the container and title bar with body-mix() so the block follows the page
-// scheme. A leading `div` keeps these authoritative over the extension's
-// class-only rules regardless of load order.
-div.code-with-filename {
-  background-color: body-mix(95%);
-  border-color: body-mix(85%);
-}
-
-div.code-with-filename .code-with-filename-file {
-  background-color: body-mix(90%);
-  border-bottom-color: body-mix(85%);
-}
-
-div.code-with-filename .code-with-filename-file pre {
-  color: rgba($body-color, 0.6);
-}
-
-div.code-with-filename div.sourceCode,
-div.code-with-filename pre.sourceCode {
-  border: none;
-  border-radius: 0;
-  background-color: transparent;
-}
-
-// ===========================================================================
-// CALLOUTS, CARDS, TABLES
-// ===========================================================================
-
-.card,
-.quarto-grid-item.card {
-  border: 1px solid var(--mn-border);
-  border-radius: $border-radius-lg;
-  background-color: body-mix(96%);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-
-  &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 30px -16px var(--mn-glow);
-    border-color: var(--mn-accent);
-  }
-}
 
 .table {
   --bs-table-border-color: var(--mn-border);
@@ -500,21 +189,10 @@ div.code-with-filename pre.sourceCode {
 }
 
 // ===========================================================================
-// SIDEBAR + TOC
+// BACK TO TOP
 // ===========================================================================
 
-#quarto-sidebar .sidebar-item-container .active,
-#quarto-sidebar .sidebar-item-container .sidebar-link:hover,
-#TOC .active {
-  color: var(--mn-accent);
-}
-
-#TOC .active {
-  border-left-color: var(--mn-accent);
-}
-
 #quarto-back-to-top {
-  border: 1px solid var(--mn-border);
   box-shadow: 0 8px 24px -12px var(--mn-glow);
 }
 
@@ -536,39 +214,13 @@ div.code-with-filename pre.sourceCode {
 // ===========================================================================
 // 404 PAGE
 // ===========================================================================
-// Quarto renders 404.qmd as an ordinary page with no distinguishing class;
-// the page opts in by wrapping its content in a .atelier-404 div.
-.atelier-404 {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 1rem;
-  min-height: 55vh;
-}
+// The layout ships with atelier. The page's front matter carries a
+// `description` for the card and search metadata, and Quarto renders that in
+// the title block, where it would repeat the sentence the centred block
+// already shows; hide it there, on this page only.
 
-.atelier-404 .atelier-404-code {
-  font-size: clamp(6rem, 20vw, 11rem);
-  font-weight: 700;
-  line-height: 1;
-  color: body-mix(88%);
-  user-select: none;
-}
-
-.atelier-404 .atelier-404-home {
-  display: inline-block;
-  padding: 0.45rem 1.1rem;
-  border: 1px solid $primary;
-  border-radius: $border-radius;
-  color: $primary;
-  text-decoration: none;
-}
-
-.atelier-404 .atelier-404-home:hover,
-.atelier-404 .atelier-404-home:focus-visible {
-  background: body-mix(92%);
-  text-decoration: underline;
+#quarto-content:has(.atelier-404) header#title-block-header .description {
+  display: none;
 }
 
 // ===========================================================================
@@ -601,6 +253,13 @@ div.code-with-filename pre.sourceCode {
     background: linear-gradient(180deg, var(--mn-tint) 0%, transparent 100%);
     border-bottom: 1px solid var(--mn-border);
   }
+}
+
+// The hero background bleeds to 100vw, a hair wider than the content area when
+// a vertical scrollbar is present. `clip` absorbs the overhang without turning
+// the body into a scroll container, so sticky navigation keeps working.
+body {
+  overflow-x: clip;
 }
 
 .hero-content {
@@ -681,6 +340,20 @@ div.code-with-filename pre.sourceCode {
   margin: 2rem 0;
 }
 
+.card,
+.quarto-grid-item.card {
+  border: 1px solid var(--mn-border);
+  border-radius: $border-radius-lg;
+  background-color: var(--mn-surface);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px -16px var(--mn-glow);
+    border-color: var(--mn-accent);
+  }
+}
+
 .card-item {
   padding: 1.25rem 1.35rem;
   border: 1px solid var(--mn-border);
@@ -708,43 +381,10 @@ div.code-with-filename pre.sourceCode {
 }
 
 // ===========================================================================
-// SCROLLBARS
-// ===========================================================================
-// Quarto leaves the browser default scrollbar, a light-grey bar that clashes
-// with the dark navbar and the tinted code surfaces; derive it from the page so
-// it tracks the active scheme, with $primary on hover. The global rules cover
-// the code blocks, tables, and TOC that scroll, so no default bar reappears.
-$scrollbar-track: body-mix(94%);
-$scrollbar-thumb: body-mix(72%);
-
-:root {
-  scrollbar-width: thin;
-  scrollbar-color: #{$scrollbar-thumb} #{$scrollbar-track};
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: $scrollbar-track;
-}
-
-::-webkit-scrollbar-thumb {
-  background: $scrollbar-thumb;
-  border-radius: $border-radius-sm;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: $primary;
-}
-
-// ===========================================================================
 // MOTION + PRINT GUARDS
 // ===========================================================================
+// Atelier guards its own navbar transitions; these are the ones added above.
 
-// The gitlink widget ships its own reduced-motion guard.
 @media (prefers-reduced-motion: reduce) {
   .navbar .nav-link::after,
   .card,

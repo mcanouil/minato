@@ -1,5 +1,6 @@
 ---
 title: "Minato"
+description: "See every repository you host and every clone on disk in one picture, then close the gap with commands that never improvise."
 toc: false
 sidebar: false
 include-in-header:

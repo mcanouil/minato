@@ -1,0 +1,23 @@
+{
+  "name": "Minato",
+  "short_name": "Minato",
+  "description": "Overview and sync of Git repositories across hosting providers.",
+  "lang": "en-GB",
+  "icons": [
+    {
+      "src": "/minato/assets/images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/minato/assets/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#0C1620",
+  "background_color": "#F7F9FB",
+  "display": "browser",
+  "start_url": "/minato/",
+  "scope": "/minato/"
+}
