@@ -17,5 +17,18 @@ subtitle: "Generated from the command-line definitions, so it never drifts from 
 
 "#;
 
-    print!("{front_matter}{}", clap_markdown::help_markdown::<Cli>());
+    // `clap-markdown` always opens with a level-one heading and a sentence
+    // saying the document is the help content, both of which the page carries
+    // as a title and a subtitle, and neither of which it can be asked to omit.
+    // Its command overview is a bullet list of every section below it, which is
+    // what the page's table of contents already is, so that one is switched off
+    // at the source and the rest cut here.
+    let options = clap_markdown::MarkdownOptions::new().show_table_of_contents(false);
+    let markdown = clap_markdown::help_markdown_custom::<Cli>(&options);
+    let body = markdown
+        .find("\n## ")
+        .map(|start| &markdown[start + 1..])
+        .expect("the reference has no command sections");
+
+    print!("{front_matter}{body}");
 }
