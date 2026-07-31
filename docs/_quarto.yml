@@ -82,9 +82,6 @@ extensions:
     icon: /assets/images/icon.svg
     apple-touch-icon: /assets/images/apple-touch-icon.png
     manifest: /site.webmanifest
-    theme-color:
-      light: "#F7F9FB"
-      dark: "#0C1620"
   gitlink:
     # Widget only: the platform and repository come from `website.repo-url`,
     # and in-text reference rewriting stays off.

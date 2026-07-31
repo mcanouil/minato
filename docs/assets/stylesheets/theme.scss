@@ -5,8 +5,15 @@
 
 // The house style, and everything that is not specific to this site, ships
 // with the atelier extension and is layered beneath this sheet. What remains
-// here is minato's own: the harbour palette the shared navbar tokens are
-// painted with, and the landing page.
+// here is minato's own: the harbour page palette and the landing page.
+
+// How the navbar, the footer, and the sidebar follow the colour scheme.
+// `auto` derives them from _brand.yml, so each bundle gets its own chrome and
+// the bars move with the toggle; `dark` or `light` pins them to one palette in
+// both. Pinning takes literal hex here, since this sheet's defaults are
+// emitted before the ones _brand.yml generates and `$brand-*` is not yet
+// defined at this point.
+$atelier-chrome: auto;
 
 $headings-font-weight: 700;
 $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace !default;
@@ -16,10 +23,10 @@ $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, mon
 // ===========================================================================
 // COLOUR TOKENS (per colour-scheme)
 // ===========================================================================
-// The page tokens follow the scheme via .quarto-dark (Quarto's body class). The
-// navbar tokens do not: the navbar and footer are `background: dark` in both
-// schemes, so atelier pins them, and repainting its tokens with the harbour
-// palette is what makes those bars minato's rather than the shared default.
+// These follow the scheme via .quarto-dark, Quarto's body class. The chrome
+// tokens are not among them: atelier derives the navbar, footer, and sidebar
+// from the brand palette in its own defaults layer, so the bars already carry
+// the harbour accent and follow the scheme with the page.
 
 :root {
   color-scheme: light;
@@ -36,16 +43,6 @@ $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, mon
   --mn-success: #2f7d5c;
   --mn-warning: #c2661b;
   --mn-danger: #b23a2b;
-
-  // Atelier's dark-pinned surface, in harbour colours: identical in both
-  // compiled stylesheets.
-  --atelier-navbar-bg: #0c1620;
-  --atelier-navbar-surface: #132430;
-  --atelier-navbar-fg: #e6edf3;
-  --atelier-navbar-muted: #8fa9b8;
-  --atelier-navbar-accent: #4fb3c4;
-  --atelier-navbar-accent-soft: rgb(79 179 196 / 0.18);
-  --atelier-navbar-border: rgb(230 237 243 / 0.16);
 }
 
 .quarto-dark {
