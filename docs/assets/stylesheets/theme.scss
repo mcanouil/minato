@@ -7,6 +7,14 @@
 // with the atelier extension and is layered beneath this sheet. What remains
 // here is minato's own: the harbour page palette and the landing page.
 
+// How the navbar, the footer, and the sidebar follow the colour scheme.
+// `auto` derives them from _brand.yml, so each bundle gets its own chrome and
+// the bars move with the toggle; `dark` or `light` pins them to one palette in
+// both. Pinning takes literal hex here, since this sheet's defaults are
+// emitted before the ones _brand.yml generates and `$brand-*` is not yet
+// defined at this point.
+$atelier-chrome: auto;
+
 $headings-font-weight: 700;
 $font-family-monospace: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace !default;
 
