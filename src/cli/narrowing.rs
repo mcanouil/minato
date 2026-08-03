@@ -79,67 +79,25 @@ struct Narrowable {
 /// accepts them everywhere and each command has to say for itself which ones it
 /// acts on. A new command will not compile until it does.
 const fn narrowable(command: &Command) -> Narrowable {
-    match command {
-        Command::Status => Narrowable {
-            command: "status",
-            honoured: EVERY,
-            note: ACTS_ON_EVERY,
-        },
-        Command::Clone { .. } => Narrowable {
-            command: "clone",
-            honoured: EVERY,
-            note: ACTS_ON_EVERY,
-        },
-        Command::Fetch { .. } => Narrowable {
-            command: "fetch",
-            honoured: EVERY,
-            note: ACTS_ON_EVERY,
-        },
-        Command::Update { .. } => Narrowable {
-            command: "update",
-            honoured: EVERY,
-            note: ACTS_ON_EVERY,
-        },
-        Command::Tui => Narrowable {
-            command: "tui",
-            honoured: EVERY,
-            note: ACTS_ON_EVERY,
-        },
-        Command::List => Narrowable {
-            command: "list",
-            honoured: REMOTE,
-            note: WORKS_REMOTELY,
-        },
-        Command::SyncFork { .. } => Narrowable {
-            command: "sync-fork",
-            honoured: REMOTE,
-            note: WORKS_REMOTELY,
-        },
-        Command::Move { .. } => Narrowable {
-            command: "move",
-            honoured: NONE,
-            note: NAMES_ITS_SUBJECT,
-        },
-        Command::Refresh => Narrowable {
-            command: "refresh",
-            honoured: NONE,
-            note: TOUCHES_NOTHING,
-        },
-        Command::Auth { .. } => Narrowable {
-            command: "auth status",
-            honoured: NONE,
-            note: TOUCHES_NOTHING,
-        },
-        Command::Doctor => Narrowable {
-            command: "doctor",
-            honoured: NONE,
-            note: TOUCHES_NOTHING,
-        },
-        Command::Completions { .. } => Narrowable {
-            command: "completions",
-            honoured: NONE,
-            note: TOUCHES_NOTHING,
-        },
+    let (command, honoured, note) = match command {
+        Command::Status => ("status", EVERY, ACTS_ON_EVERY),
+        Command::Clone { .. } => ("clone", EVERY, ACTS_ON_EVERY),
+        Command::Fetch { .. } => ("fetch", EVERY, ACTS_ON_EVERY),
+        Command::Update { .. } => ("update", EVERY, ACTS_ON_EVERY),
+        Command::Tui => ("tui", EVERY, ACTS_ON_EVERY),
+        Command::List => ("list", REMOTE, WORKS_REMOTELY),
+        Command::SyncFork { .. } => ("sync-fork", REMOTE, WORKS_REMOTELY),
+        Command::Move { .. } => ("move", NONE, NAMES_ITS_SUBJECT),
+        Command::Refresh => ("refresh", NONE, TOUCHES_NOTHING),
+        Command::Auth { .. } => ("auth status", NONE, TOUCHES_NOTHING),
+        Command::Doctor => ("doctor", NONE, TOUCHES_NOTHING),
+        Command::Completions { .. } => ("completions", NONE, TOUCHES_NOTHING),
+    };
+
+    Narrowable {
+        command,
+        honoured,
+        note,
     }
 }
 
