@@ -43,6 +43,63 @@ error() {
 	exit 1
 }
 
+# Where a completion script written as `minato completions` describes would be.
+#
+# Mirrors `completion_locations` in src/cli/mod.rs, which `minato doctor` uses;
+# keep the two in step. $fpath is a zsh variable and this is bash, so the zsh
+# entries are the conventional directories rather than a real search of it, and
+# $ZSH_CUSTOM is read for an oh-my-zsh that has been moved even though a
+# `curl | bash` pipe will rarely have it exported.
+#
+# PowerShell is absent for a reason of its own: the documented setup evaluates
+# the script from $PROFILE at every session, so it regenerates itself and can
+# never be stale.
+completion_locations() {
+	local zsh_custom="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}"
+
+	printf '%s\t%s\n' \
+		bash "${HOME}/.local/share/bash-completion/completions/${BINARY_NAME}" \
+		zsh "${HOME}/.zfunc/_${BINARY_NAME}" \
+		zsh "${zsh_custom}/completions/_${BINARY_NAME}" \
+		fish "${HOME}/.config/fish/completions/${BINARY_NAME}.fish" \
+		elvish "${HOME}/.config/elvish/lib/${BINARY_NAME}.elv"
+}
+
+# Names the completion scripts the version just installed would generate
+# differently, with the command that rewrites each.
+#
+# An install is the one moment that knows the command surface may have changed,
+# and a stale script keeps working while quietly offering the commands of an
+# older release. Comparing against the binary just installed, rather than
+# assuming every script is now stale, keeps a reinstall of the same version
+# silent.
+report_stale_completions() {
+	local binary="$1"
+	local shell path generated announced=0
+
+	# No HOME means no conventional location to look in, and `set -u` would
+	# trip on the lookups below.
+	[ -n "${HOME:-}" ] || return 0
+
+	while IFS=$'\t' read -r shell path; do
+		[ -f "${path}" ] || continue
+		# A binary that cannot run here says nothing about the script; the
+		# install already reported what it could, and `doctor` will say more.
+		generated=$("${binary}" completions "${shell}" 2>/dev/null) || continue
+		[ "${generated}" = "$(cat "${path}")" ] && continue
+
+		if [ "${announced}" -eq 0 ]; then
+			warn "Completion scripts do not update themselves. Regenerate:"
+			announced=1
+		fi
+		echo "  ${BINARY_NAME} completions ${shell} > ${path}"
+	done < <(completion_locations)
+
+	if [ "${announced}" -eq 1 ]; then
+		echo
+	fi
+}
+
 # mktemp output lives in a global so the EXIT trap, which runs after main()
 # returns and its locals are gone, can still see and remove it. Guarded so an
 # exit before mktemp (empty tmpdir) does not trip `set -u`.
@@ -283,6 +340,8 @@ main() {
 		echo
 		;;
 	esac
+
+	report_stale_completions "${install_dir}/${BINARY_NAME}"
 
 	echo "Next steps:"
 	echo "  ${BINARY_NAME} doctor   # Check configuration and tooling are usable"
