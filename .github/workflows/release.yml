@@ -190,6 +190,8 @@ jobs:
             os: ubuntu-24.04-arm
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -367,7 +369,7 @@ jobs:
             echo
             echo "- Tag: \`${VERSION}\`"
             echo "- Release: ${URL}"
-            echo "- Assets: five platform archives, each carrying the binary alone, plus SHA256SUMS."
+            echo "- Assets: six platform archives, each carrying the binary alone, plus SHA256SUMS."
           } >> "${GITHUB_STEP_SUMMARY}"
 
   pages:

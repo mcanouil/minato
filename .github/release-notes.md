@@ -98,6 +98,7 @@ gh attestation verify "minato-%%VERSION%%-x86_64-unknown-linux-musl.tar.gz" \
 | `minato-%%VERSION%%-aarch64-apple-darwin.tar.gz` | macOS on Apple silicon. |
 | `minato-%%VERSION%%-x86_64-apple-darwin.tar.gz` | macOS on Intel. |
 | `minato-%%VERSION%%-x86_64-pc-windows-msvc.zip` | Windows on Intel or AMD. |
+| `minato-%%VERSION%%-aarch64-pc-windows-msvc.zip` | Windows on ARM. |
 
 ## Documentation
 
