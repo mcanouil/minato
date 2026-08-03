@@ -26,6 +26,22 @@ pub struct Filter {
     pub include_external: bool,
 }
 
+/// Whether `wanted` names `group` or one of the groups beneath it.
+///
+/// A group is a directory path, so naming `perso` means everything filed under
+/// it, `perso/apps` included. Matching runs segment by segment rather than over
+/// the whole string, so `pers` does not stand for `perso` and `apps` does not
+/// stand for `perso/apps`: a group is named from the root down.
+fn covers(wanted: &str, group: &str) -> bool {
+    let mut segments = group.split('/');
+
+    wanted.trim_end_matches('/').split('/').all(|named| {
+        segments
+            .next()
+            .is_some_and(|segment| segment.eq_ignore_ascii_case(named))
+    })
+}
+
 /// A state named on the command line.
 ///
 /// This is coarser than [`State`], because someone asking for what is behind
@@ -122,11 +138,10 @@ impl Filter {
             return true;
         }
 
-        comparison.group.as_ref().is_some_and(|group| {
-            self.groups
-                .iter()
-                .any(|wanted| wanted.eq_ignore_ascii_case(group))
-        })
+        comparison
+            .group
+            .as_ref()
+            .is_some_and(|group| self.groups.iter().any(|wanted| covers(wanted, group)))
     }
 
     fn accepts_state(&self, comparison: &Comparison) -> bool {
@@ -285,6 +300,61 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn naming_a_group_keeps_everything_beneath_it_too() {
+        let filter = Filter {
+            groups: vec!["perso".to_owned()],
+            ..Filter::default()
+        };
+
+        let kept = filter.apply(vec![
+            comparison("mcanouil", Some("perso"), State::InSync),
+            comparison("mcanouil", Some("perso/apps"), State::InSync),
+            comparison("mcanouil", Some("perso/apps/rust"), State::InSync),
+            comparison("mcanouil", Some("pro"), State::InSync),
+        ]);
+
+        assert_eq!(kept.len(), 3);
+    }
+
+    #[test]
+    fn naming_a_nested_group_keeps_only_that_subtree() {
+        let filter = Filter {
+            groups: vec!["PERSO/Apps".to_owned()],
+            ..Filter::default()
+        };
+
+        let kept = filter.apply(vec![
+            comparison("mcanouil", Some("perso/apps"), State::InSync),
+            comparison("mcanouil", Some("perso/apps/rust"), State::InSync),
+            comparison("mcanouil", Some("perso"), State::InSync),
+            comparison("mcanouil", Some("perso/data"), State::InSync),
+        ]);
+
+        assert_eq!(kept.len(), 2, "a nested group matches at every segment");
+    }
+
+    #[test]
+    fn a_group_is_matched_by_whole_segments_from_the_root_down() {
+        for wanted in ["apps", "pers", "perso/app", "so/apps"] {
+            let filter = Filter {
+                groups: vec![wanted.to_owned()],
+                ..Filter::default()
+            };
+
+            let kept = filter.apply(vec![comparison(
+                "mcanouil",
+                Some("perso/apps"),
+                State::InSync,
+            )]);
+
+            assert!(
+                kept.is_empty(),
+                "`{wanted}` is not a whole-segment prefix of `perso/apps`, so it should match nothing"
+            );
+        }
     }
 
     #[test]

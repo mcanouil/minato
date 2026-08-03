@@ -31,7 +31,11 @@ A clone is matched to a repository by its remote URL rather than by where it sit
 A group is simply a directory beneath a root, so `~/Projects/demo/some-repo` is in the `demo` group with nothing to configure.
 The tree is the source of truth, and the relationship runs both ways: `--group demo` selects what is already there, and `minato clone --into-group demo` puts new clones where that group already lives.
 
-Moving between groups moves the directory: `minato move imdb-ratings --to-group demo`.
+Groups nest as the tree does: `~/Projects/perso/apps/minato` is in `perso/apps`, a group whose parent is `perso`.
+Naming a group takes everything beneath it, so `--group perso` keeps `perso/apps` and `perso/data` as well, while `--group perso/apps` keeps only that bucket.
+Matching runs from the root down, one directory at a time, so `--group apps` does not stand for `perso/apps`.
+
+Moving between groups moves the directory: `minato move imdb-ratings --to-group demo`, or `--to-group perso/apps` for a nested one.
 A clone does not care where it sits, so this is a plain rename, but it is still a change to your filesystem.
 It is therefore one repository at a time, never a side effect of another command, refuses anything it would have to overwrite, and refuses an ambiguous name rather than guessing which repository you meant.
 The directory keeps its own name, which is not always the repository name.

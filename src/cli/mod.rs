@@ -6,7 +6,7 @@
 
 mod render;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use jiff::{SignedDuration, Timestamp};
@@ -44,8 +44,11 @@ pub struct Cli {
     #[arg(long = "owner", global = true, value_name = "OWNER")]
     pub owners: Vec<String>,
 
-    /// Keep only repositories in these groups, which are the directories
-    /// beneath a root.
+    /// Keep only repositories in these groups, and in the groups beneath them.
+    ///
+    /// A group is a directory path beneath a root, written with `/`, so
+    /// `--group perso` keeps `perso` and everything filed under it, including
+    /// `perso/apps`, while `--group perso/apps` keeps only that bucket.
     #[arg(long = "group", global = true, value_name = "GROUP")]
     pub groups: Vec<String>,
 
@@ -84,8 +87,8 @@ pub enum Command {
         #[arg(long, value_name = "DIRECTORY")]
         into: Option<PathBuf>,
 
-        /// Put them in this group, which is the directory that group already
-        /// occupies beneath a root.
+        /// Put them in this group, which is the directory path that group
+        /// already occupies beneath a root, such as `perso/apps`.
         ///
         /// This is not the same as the `--group` filter, which selects by
         /// where a clone already sits. A repository that has not been cloned
@@ -136,7 +139,8 @@ pub enum Command {
         #[arg(value_name = "REPOSITORY")]
         repository: String,
 
-        /// The group to move it into, which is a directory beneath its root.
+        /// The group to move it into, which is a directory path beneath its
+        /// root, such as `perso/apps`.
         #[arg(long = "to-group", value_name = "GROUP")]
         group: String,
 
@@ -209,6 +213,10 @@ pub enum CliError {
     /// A repository could not be moved.
     #[error(transparent)]
     Move(#[from] actions::MoveError),
+
+    /// A group did not name a directory path beneath a root.
+    #[error(transparent)]
+    Group(#[from] actions::InvalidGroupError),
 
     /// Output could not be rendered.
     #[error("cannot render JSON output: {0}")]
@@ -342,13 +350,7 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
             // A group names a directory that already exists somewhere beneath
             // a root, so cloning into a group means cloning where its
             // repositories already live rather than repeating the path.
-            let destination = match (into, group) {
-                (Some(into), _) => into,
-                (None, Some(group)) => {
-                    directory_for_group(&roots, &group).unwrap_or_else(|| root.join(&group))
-                }
-                (None, None) => root,
-            };
+            let destination = clone_destination(&roots, &root, into, group.as_deref())?;
 
             actions::clone_missing(&comparisons, &destination, &config.local, shallow, mode)
         }
@@ -581,36 +583,33 @@ async fn tui(cli: &Cli) -> Result<Output, CliError> {
         match action {
             crate::tui::Action::Fetch => actions::fetch_all(&selection, Mode::Execute),
             crate::tui::Action::Update => actions::update_all(&selection, Mode::Execute),
-            crate::tui::Action::Clone { group } => clone_root.as_ref().map_or_else(
-                || actions::Summary {
+            crate::tui::Action::Clone { group } => {
+                // Nothing here can fail the whole session: a typed group that
+                // leads nowhere is reported on the row it was typed for, the
+                // same way a clone that could not run is.
+                let skipped = |reason: String| actions::Summary {
                     reports: vec![actions::Report {
                         id: comparison.id.clone(),
                         path: None,
-                        outcome: actions::Outcome::Skipped {
-                            reason: "no configured root to clone into".to_owned(),
-                        },
+                        outcome: actions::Outcome::Skipped { reason },
                     }],
-                },
-                |root| {
-                    // A named group is where its directory already sits, or a
-                    // new one beneath the first root; no group clones into the
-                    // root directly, as `minato clone` does.
-                    let destination = group.as_deref().map_or_else(
-                        || root.clone(),
-                        |group| {
-                            directory_for_group(&roots, group).unwrap_or_else(|| root.join(group))
-                        },
-                    );
+                };
 
-                    actions::clone_missing(
+                let Some(root) = clone_root.as_ref() else {
+                    return skipped("no configured root to clone into".to_owned());
+                };
+
+                match clone_destination(&roots, root, None, group.as_deref()) {
+                    Ok(destination) => actions::clone_missing(
                         &selection,
                         &destination,
                         &config.local,
                         false,
                         Mode::Execute,
-                    )
-                },
-            ),
+                    ),
+                    Err(error) => skipped(error.to_string()),
+                }
+            }
         }
     };
 
@@ -1048,11 +1047,42 @@ fn append_scan_notes(out: &mut String, scanned: &scan::Scan) {
     }
 }
 
+/// Where new clones should land.
+///
+/// A named directory is taken as given, since `--into` is the way to say where
+/// outright. A named group is the directory it already occupies somewhere
+/// beneath a root, or a new one beneath `root` when it holds nothing yet.
+/// Naming neither clones into `root` itself.
+///
+/// # Errors
+///
+/// Returns an error when the group does not name a directory path beneath a
+/// root, so `--into-group` refuses what `--to-group` refuses rather than
+/// quietly building a path leading out of the tree.
+fn clone_destination(
+    roots: &[PathBuf],
+    root: &Path,
+    into: Option<PathBuf>,
+    group: Option<&str>,
+) -> Result<PathBuf, actions::InvalidGroupError> {
+    if let Some(into) = into {
+        return Ok(into);
+    }
+
+    let Some(group) = group else {
+        return Ok(root.to_owned());
+    };
+
+    actions::check_group(group)?;
+
+    Ok(directory_for_group(roots, group).unwrap_or_else(|| actions::group_path(root, group)))
+}
+
 /// Finds the directory a group already occupies beneath one of the roots.
 fn directory_for_group(roots: &[PathBuf], group: &str) -> Option<PathBuf> {
     roots
         .iter()
-        .map(|root| root.join(group))
+        .map(|root| actions::group_path(root, group))
         .find(|candidate| candidate.is_dir())
 }
 
@@ -1143,6 +1173,69 @@ mod tests {
     #[test]
     fn the_command_surface_is_well_formed() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn a_nested_group_resolves_to_the_directory_it_already_occupies() {
+        let root = tempfile::tempdir().expect("a temporary directory");
+        std::fs::create_dir_all(root.path().join("perso/apps")).expect("a group directory");
+
+        let roots = vec![PathBuf::from("/nonexistent"), root.path().to_owned()];
+
+        assert_eq!(
+            directory_for_group(&roots, "perso/apps"),
+            Some(root.path().join("perso/apps"))
+        );
+        assert_eq!(
+            directory_for_group(&roots, "perso/data"),
+            None,
+            "a group with no directory anywhere is left for the caller to create"
+        );
+    }
+
+    #[test]
+    fn a_new_group_is_created_beneath_the_first_root() {
+        let roots = vec![PathBuf::from("/code")];
+
+        assert_eq!(
+            clone_destination(&roots, Path::new("/code"), None, Some("perso/apps"))
+                .expect("a destination"),
+            PathBuf::from("/code/perso/apps")
+        );
+    }
+
+    #[test]
+    fn a_named_directory_is_taken_as_given() {
+        let roots = vec![PathBuf::from("/code")];
+
+        assert_eq!(
+            clone_destination(
+                &roots,
+                Path::new("/code"),
+                Some(PathBuf::from("/elsewhere")),
+                None
+            )
+            .expect("a destination"),
+            PathBuf::from("/elsewhere")
+        );
+
+        assert_eq!(
+            clone_destination(&roots, Path::new("/code"), None, None).expect("a destination"),
+            PathBuf::from("/code"),
+            "naming neither clones into the root itself"
+        );
+    }
+
+    #[test]
+    fn cloning_refuses_a_group_that_would_lead_out_of_the_root() {
+        let roots = vec![PathBuf::from("/code")];
+
+        for bad in ["../evil", "perso/../evil", "perso//apps", ""] {
+            assert!(
+                clone_destination(&roots, Path::new("/code"), None, Some(bad)).is_err(),
+                "group `{bad}` should be refused rather than cloned into"
+            );
+        }
     }
 
     #[test]

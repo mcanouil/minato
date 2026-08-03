@@ -76,12 +76,13 @@ pub struct LocalRepo {
     /// Whether tracked files hold uncommitted changes.
     pub dirty: bool,
 
-    /// The group this clone belongs to, taken from the directory it sits in
-    /// beneath its root.
+    /// The group this clone belongs to, taken from the directories it sits in
+    /// beneath its root, joined with `/`.
     ///
     /// The tree is the source of truth for grouping: a repository under
-    /// `~/Projects/demo` is in the `demo` group without anyone saying so.
-    /// A clone sitting directly in a root has no group.
+    /// `~/Projects/demo` is in the `demo` group without anyone saying so, and
+    /// one under `~/Projects/perso/apps` is in `perso/apps`, a group whose
+    /// parent is `perso`. A clone sitting directly in a root has no group.
     pub group: Option<String>,
 
     /// Whether the working tree holds files git is not tracking.
@@ -143,20 +144,25 @@ pub fn read_within(path: &Path, root: Option<&Path>) -> Result<LocalRepo, git::G
     })
 }
 
-/// The group a clone falls in: the first directory beneath its root.
+/// The group a clone falls in: every directory between its root and itself.
 ///
 /// A clone sitting directly in a root has no group, and neither has one whose
 /// path does not lie beneath the root at all.
+///
+/// Segments are joined with `/` whatever the platform separates paths with, so
+/// a group reads and compares the same everywhere.
 fn group_of(path: &Path, root: &Path) -> Option<String> {
-    let relative = path.strip_prefix(root).ok()?;
-    let mut segments = relative.components();
-    let first = segments.next()?;
+    // The last segment is the repository itself, not a group, so a clone
+    // directly in the root has nothing left once it is dropped.
+    let group = path.strip_prefix(root).ok()?.parent()?;
 
-    // A clone directly in the root is ungrouped: the last segment is the
-    // repository itself, not a group.
-    segments.next()?;
-
-    Some(first.as_os_str().to_string_lossy().into_owned())
+    (!group.as_os_str().is_empty()).then(|| {
+        group
+            .components()
+            .map(|segment| segment.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/")
+    })
 }
 
 /// Whether `git status --porcelain` reported a change to a tracked file.
@@ -460,6 +466,32 @@ mod tests {
     #[test]
     fn treats_a_staged_addition_as_a_tracked_change() {
         assert!(has_tracked_changes("A  new.rs"));
+    }
+
+    #[test]
+    fn a_group_is_every_directory_between_the_root_and_the_clone() {
+        let root = Path::new("/projects");
+
+        assert_eq!(
+            group_of(Path::new("/projects/perso/apps/minato"), root).as_deref(),
+            Some("perso/apps")
+        );
+        assert_eq!(
+            group_of(Path::new("/projects/perso/apps/rust/minato"), root).as_deref(),
+            Some("perso/apps/rust")
+        );
+        assert_eq!(
+            group_of(Path::new("/projects/perso/minato"), root).as_deref(),
+            Some("perso")
+        );
+    }
+
+    #[test]
+    fn a_clone_in_the_root_or_outside_it_has_no_group() {
+        let root = Path::new("/projects");
+
+        assert_eq!(group_of(Path::new("/projects/minato"), root), None);
+        assert_eq!(group_of(Path::new("/elsewhere/perso/minato"), root), None);
     }
 
     #[test]

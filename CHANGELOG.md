@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Features
+
+- feat: let groups nest as the directory tree does, so a clone in `perso/apps` is in the group `perso/apps` rather than reported as `perso`, with `--group perso` keeping everything filed beneath it and `--to-group` and `--into-group` accepting a nested group.
+
+### Bug Fixes
+
+- fix: refuse a `--into-group`, or a group typed in the browser, that names its way out of a root, which `--to-group` already refused rather than cloning there.
+
 ## 0.2.0 (2026-07-22)
 
 ### Performance
