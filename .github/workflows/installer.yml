@@ -1,0 +1,83 @@
+name: Installer
+
+# The Windows installer lives under docs/, which the CI workflow excludes
+# through paths-ignore, so its checks belong here rather than there.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/install.ps1"
+      - ".github/workflows/installer.yml"
+  pull_request:
+    paths:
+      - "docs/install.ps1"
+      - ".github/workflows/installer.yml"
+  # So the installer can be run against a freshly published release by hand.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint the PowerShell installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser -SkipPublisherCheck
+
+      - name: Analyse
+        shell: pwsh
+        # ParseError is a severity of its own, so leaving it out of the list
+        # would let a script that does not even parse pass the job.
+        #
+        # PSUseBOMForUnicodeEncodedFile asks for a byte order mark, which the
+        # published script must not carry: it would ride into `irm | iex`. The
+        # only character it flags is the accented author name in a comment.
+        run: |
+          Invoke-ScriptAnalyzer -Path docs/install.ps1 `
+            -Severity ParseError,Warning,Error `
+            -ExcludeRule PSUseBOMForUnicodeEncodedFile `
+            -EnableExit
+
+  smoke:
+    name: Install with ${{ matrix.name }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      # pwsh is PowerShell 7; powershell is Windows PowerShell 5.1, which is what
+      # the advertised `powershell -ExecutionPolicy ByPass -c` one-liner actually
+      # runs, so both have to work. The step itself is always pwsh, and starts
+      # the interpreter under test as a child process, because an expression is
+      # not allowed in a step's `shell`.
+      matrix:
+        include:
+          - name: PowerShell 7
+            exe: pwsh
+          - name: Windows PowerShell 5.1
+            exe: powershell
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the latest release and run it
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'minato-install'
+
+          & ${{ matrix.exe }} -NoProfile -ExecutionPolicy Bypass -File .\docs\install.ps1 -Dir $dir -NoModifyPath
+          if ($LASTEXITCODE -ne 0) { throw 'The installer failed.' }
+
+          # Again, over the binary just installed: an upgrade has to replace a
+          # file that is already there.
+          & ${{ matrix.exe }} -NoProfile -ExecutionPolicy Bypass -File .\docs\install.ps1 -Dir $dir -NoModifyPath
+          if ($LASTEXITCODE -ne 0) { throw 'Installing over an existing binary failed.' }
+
+          & (Join-Path $dir 'minato.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw 'The installed binary did not run.' }

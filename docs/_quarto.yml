@@ -6,8 +6,10 @@ project:
     - assets/images/
     - favicon.ico
     - site.webmanifest
-    # Published verbatim so `curl -fsSL .../install.sh | bash` works.
+    # Published verbatim so `curl -fsSL .../install.sh | bash` and
+    # `irm .../install.ps1 | iex` work.
     - install.sh
+    - install.ps1
 
 website:
   title: "Minato"

@@ -9,13 +9,21 @@ subtitle: "Install it, point it at your accounts, and see what has drifted."
 
 ### Quick install (script)
 
+On macOS and Linux:
+
 ```{.bash filename="Terminal"}
 curl -fsSL https://m.canouil.dev/minato/install.sh | bash
 ```
 
-The script detects your platform, verifies the download against the release `SHA256SUMS`, and installs into `/usr/local/bin` when writable, otherwise `~/.local/bin`.
+On Windows:
+
+```{.powershell filename="PowerShell"}
+powershell -ExecutionPolicy ByPass -c "irm https://m.canouil.dev/minato/install.ps1 | iex"
+```
+
+Either script detects your platform, verifies the download against the release `SHA256SUMS`, and puts the binary somewhere you can run it: `/usr/local/bin` when writable and otherwise `~/.local/bin`, or `%LOCALAPPDATA%\Programs\minato` on Windows, which it adds to your user `PATH` when it is not already there.
 Set `MINATO_VERSION` to pin a release, `MINATO_INSTALL_DIR` to choose where it lands, or `MINATO_SKIP_CHECKSUM=1` to bypass verification.
-It needs `bash` and `curl`; on Windows, use the `.zip` from the releases page instead.
+The shell script needs `bash` and `curl`; the PowerShell one runs on Windows PowerShell 5.1 as well as PowerShell 7, and takes `MINATO_NO_MODIFY_PATH=1` to leave `PATH` alone.
 
 ### With cargo
 
