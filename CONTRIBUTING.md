@@ -29,7 +29,7 @@ devcontainer exec --workspace-folder . cargo test --locked
 ```
 
 It has been verified end to end: the container builds, all tests pass inside it, and Minato itself runs there.
-It carries Rust, `git`, `gh`, `jq`, and `kata`, with the kata ledger bind-mounted from the host so issue state is shared.
+It carries Rust, `git`, `gh`, `jq`, `kata`, and PowerShell with PSScriptAnalyzer, with the kata ledger bind-mounted from the host so issue state is shared.
 
 Two things worth knowing.
 

@@ -127,13 +127,20 @@ Deployment to GitHub Pages is deferred until the repository is public, since Pag
 
 ### Quick install (script)
 
+On macOS and Linux:
+
 ```sh
 curl -fsSL https://m.canouil.dev/minato/install.sh | bash
 ```
 
-Detects your platform, verifies the download against the release `SHA256SUMS`, and installs into `/usr/local/bin` when writable, otherwise `~/.local/bin`.
-Set `MINATO_VERSION` to pin a release, `MINATO_INSTALL_DIR` to choose where it lands, or `MINATO_SKIP_CHECKSUM=1` to skip verification.
-On Windows, use the `.zip` from the releases page instead.
+On Windows:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://m.canouil.dev/minato/install.ps1 | iex"
+```
+
+Either script detects your platform, verifies the download against the release `SHA256SUMS`, and installs into `/usr/local/bin` when writable and otherwise `~/.local/bin`, or `%LOCALAPPDATA%\Programs\minato` on Windows, which it adds to your user `PATH`.
+Set `MINATO_VERSION` to pin a release, `MINATO_INSTALL_DIR` to choose where it lands, `MINATO_SKIP_CHECKSUM=1` to skip verification, or `MINATO_NO_MODIFY_PATH=1` to leave `PATH` alone.
 
 ### With cargo
 

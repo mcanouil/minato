@@ -2,7 +2,8 @@
   "name": "minato",
   "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
   "features": {
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/powershell:1": {}
   },
   "mounts": [
     "source=${localEnv:HOME}/.kata,target=/home/vscode/.kata,type=bind"

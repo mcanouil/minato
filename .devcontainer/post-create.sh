@@ -9,3 +9,7 @@ set -euo pipefail
 curl -fsSL https://katatracker.com/install.sh | bash
 
 kata version
+
+# PSScriptAnalyzer lints docs/install.ps1, the Windows installer, under the same
+# rules the Installer workflow runs. PowerShell itself comes from a feature.
+pwsh -NoProfile -Command "Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser -SkipPublisherCheck"
