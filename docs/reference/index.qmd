@@ -76,7 +76,7 @@ github:mcanouil/pandoc         forks   in sync     fork, 429 behind upstream /Us
 
 ### `minato doctor`
 
-Checks `git`, the token, configuration, roots, and the cache, reporting all of them rather than stopping at the first problem.
+Checks `git`, the token, configuration, roots, the cache, and whether any installed shell completion script has fallen behind the command surface, reporting all of them rather than stopping at the first problem.
 
 ### `minato auth status`
 
