@@ -338,13 +338,8 @@ pub enum MoveError {
     },
 
     /// The group is not a directory path beneath a root.
-    #[error(
-        "`{group}` is not a valid group; a group is a directory path beneath a root, written with `/`, so no part of it can be empty, `.` or `..`, and it cannot contain `\\`"
-    )]
-    InvalidGroup {
-        /// The offending group.
-        group: String,
-    },
+    #[error(transparent)]
+    InvalidGroup(#[from] InvalidGroupError),
 
     /// The move itself failed.
     #[error("cannot move `{}` to `{}`: {message}", from.display(), to.display())]
@@ -356,6 +351,46 @@ pub enum MoveError {
         /// What the operating system reported.
         message: String,
     },
+}
+
+/// A group that does not name a directory path beneath a root.
+///
+/// It is its own error rather than a variant of [`MoveError`], because placing
+/// a new clone in a group has the same rule and deserves the same words.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "`{group}` is not a valid group; a group is a directory path beneath a root, written with `/`, so no part of it can be empty, `.` or `..`, and it cannot contain `\\`"
+)]
+pub struct InvalidGroupError {
+    /// The offending group.
+    pub group: String,
+}
+
+/// Checks that a group names a directory path beneath a root.
+///
+/// An empty segment, `.` or `..` would lead somewhere else in the tree or out
+/// of the root entirely, and a backslash is a legal character in a directory
+/// name on Unix, so neither is guessed at: both are refused before any path is
+/// built.
+///
+/// # Errors
+///
+/// Returns an error when the group is empty, holds an empty segment, `.` or
+/// `..`, or contains a backslash.
+pub fn check_group(group: &str) -> Result<(), InvalidGroupError> {
+    let valid = !group.is_empty()
+        && !group.contains('\\')
+        && group
+            .split('/')
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..");
+
+    if valid {
+        Ok(())
+    } else {
+        Err(InvalidGroupError {
+            group: group.to_owned(),
+        })
+    }
 }
 
 /// The directory a group occupies beneath `root`.
@@ -383,15 +418,6 @@ pub fn move_destination(path: &Path, root: &Path, group: &str) -> PathBuf {
         .map_or_else(|| path.to_owned(), PathBuf::from);
 
     group_path(root, group).join(name)
-}
-
-/// Whether a group names a directory path beneath a root.
-fn is_valid_group(group: &str) -> bool {
-    !group.is_empty()
-        && !group.contains('\\')
-        && group
-            .split('/')
-            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 /// Finds the one repository the user meant.
@@ -454,16 +480,7 @@ pub fn move_to_group(
     group: &str,
     mode: Mode,
 ) -> Result<Report, MoveError> {
-    // A group names a directory path beneath a root, written with `/`. An
-    // empty segment, `.` or `..` would move the clone somewhere else in the
-    // tree or out of the root entirely, and a backslash is a legal character
-    // in a directory name on Unix, so neither is guessed at: both are refused
-    // before any path is built.
-    if !is_valid_group(group) {
-        return Err(MoveError::InvalidGroup {
-            group: group.to_owned(),
-        });
-    }
+    check_group(group)?;
 
     let Some(path) = comparison.path.clone() else {
         return Err(MoveError::NotCloned {
@@ -784,7 +801,7 @@ mod moving {
             assert!(
                 matches!(
                     move_to_group(&repository, "minato", &roots(), bad, Mode::DryRun),
-                    Err(MoveError::InvalidGroup { .. })
+                    Err(MoveError::InvalidGroup(_))
                 ),
                 "group `{bad}` should be rejected as invalid"
             );
