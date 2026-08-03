@@ -169,7 +169,6 @@ pub enum Command {
     /// definitions, so it cannot describe a command the binary does not have.
     Completions {
         /// Which shell to generate for.
-        #[arg(value_name = "SHELL")]
         shell: clap_complete::Shell,
     },
 
@@ -808,13 +807,14 @@ fn refresh(as_json: bool) -> Result<String, CliError> {
 
 /// Generates a completion script for a shell.
 ///
-/// The binary name is fixed rather than taken from argv, so a script written
-/// from a build directory or from a copy under another name still completes
-/// the command as it is installed.
+/// The name completed is the one the command carries rather than the one it
+/// was invoked by, so a script written from a build directory, or from a copy
+/// under another name, still completes the command as it is installed.
 fn completions(shell: clap_complete::Shell) -> String {
     let mut command = Cli::command();
+    let name = command.get_name().to_owned();
     let mut script = Vec::new();
-    clap_complete::generate(shell, &mut command, "minato", &mut script);
+    clap_complete::generate(shell, &mut command, name, &mut script);
 
     String::from_utf8(script).expect("clap_complete writes UTF-8")
 }

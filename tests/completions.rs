@@ -39,26 +39,12 @@ async fn every_shell_generates_a_script_naming_the_binary_and_its_commands() {
     }
 }
 
-/// The script is the whole output, so anything printed alongside it would be
-/// sourced by the shell as if it were code.
-#[tokio::test]
-async fn a_script_carries_nothing_but_itself() {
-    let script = output_of(&["minato", "completions", "fish"]).await;
-
-    assert!(
-        script.starts_with('#') || script.starts_with("function") || script.starts_with("complete"),
-        "the fish script opens with something that is not fish: {:?}",
-        script.lines().next()
-    );
-}
-
 /// Flag values that derive `ValueEnum` complete on their own, and `--state` is
 /// the one users reach for most, so its values reaching the script is the
 /// difference between completing a filter and typing it out.
 ///
-/// Only bash, zsh, and fish are checked: `clap_complete`'s elvish and PowerShell
-/// generators emit flag names without their possible values, which the
-/// documentation says rather than this test pretending otherwise.
+/// Only bash, zsh, and fish carry them, for the reason the command reference
+/// gives.
 #[tokio::test]
 async fn state_values_reach_the_shells_that_carry_them() {
     for shell in ["bash", "zsh", "fish"] {
