@@ -180,10 +180,15 @@ pub enum Command {
 
     /// Print a shell completion script.
     ///
-    /// Written to standard output rather than to a file, because where a
-    /// completion script belongs is the shell's business rather than
-    /// something minato should decide. It is generated from the command
-    /// definitions, so it cannot describe a command the binary does not have.
+    /// The script goes to standard output and where to put it goes to standard
+    /// error, so `minato completions zsh > _minato` writes the script alone
+    /// while the instructions still reach the terminal. Run it without
+    /// redirecting to read them, or see
+    /// <https://m.canouil.dev/minato/get-started/#enable-completion>.
+    ///
+    /// It is generated from the command definitions, so it cannot describe a
+    /// command the binary does not have, and it needs regenerating after an
+    /// upgrade that adds one.
     Completions {
         /// Which shell to generate for.
         shell: clap_complete::Shell,
@@ -308,7 +313,13 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
             command: AuthCommand::Status,
         } => Ok(auth_status(cli.json).into()),
         Command::Doctor => doctor(cli.json).map(Into::into),
-        Command::Completions { shell } => Ok(completions(*shell).into()),
+        Command::Completions { shell } => {
+            // On standard error, so a redirect into the shell's completion
+            // directory captures the script and leaves the instructions on
+            // the terminal, where they are of use.
+            eprintln!("{}", completion_hint(*shell));
+            Ok(completions(*shell).into())
+        }
         Command::Tui => tui(cli).await,
         Command::Refresh => refresh(cli.json).map(Into::into),
         Command::List => list(cli).await.map(Into::into),
@@ -844,6 +855,53 @@ fn completions(shell: clap_complete::Shell) -> String {
     String::from_utf8(script).expect("clap_complete writes UTF-8")
 }
 
+/// Where the per-shell instructions live, for the hint to point at when the
+/// few lines it can spare are not enough.
+const COMPLETION_DOCS: &str = "https://m.canouil.dev/minato/get-started/#enable-completion";
+
+/// What to do with the script a shell was just handed.
+///
+/// Printed to standard error rather than returned with the script, so that
+/// `minato completions zsh > _minato` writes the script alone while the
+/// instructions still reach the terminal.
+fn completion_hint(shell: clap_complete::Shell) -> String {
+    use clap_complete::Shell;
+
+    let steps = match shell {
+        Shell::Bash => "Write it to ~/.local/share/bash-completion/completions/minato.".to_owned(),
+        // oh-my-zsh puts its custom completions directory on $fpath and runs
+        // compinit itself, so naming it first spares those users an edit to
+        // ~/.zshrc that would do nothing.
+        Shell::Zsh => [
+            "Write it as _minato in a directory on $fpath.",
+            "With oh-my-zsh, ~/.oh-my-zsh/custom/completions needs nothing further.",
+            "Otherwise, such as ~/.zfunc, have compinit run after it is added:",
+            "  fpath=(~/.zfunc $fpath)",
+            "  autoload -Uz compinit && compinit",
+        ]
+        .join("\n"),
+        Shell::Fish => "Write it to ~/.config/fish/completions/minato.fish.".to_owned(),
+        Shell::Elvish => [
+            "Write it to ~/.config/elvish/lib/minato.elv,",
+            "then load it from ~/.config/elvish/rc.elv:",
+            "  use minato",
+        ]
+        .join("\n"),
+        Shell::PowerShell => [
+            "Evaluate it rather than saving it:",
+            "  minato completions powershell | Out-String | Invoke-Expression",
+            "Add that line to the file $PROFILE names to have it apply to every session.",
+        ]
+        .join("\n"),
+        // `Shell` is non-exhaustive, so a shell added by a future
+        // `clap_complete` still gets pointed somewhere useful rather than
+        // failing to compile or saying nothing at all.
+        _ => format!("Install it where {shell} looks for completion scripts for minato."),
+    };
+
+    format!("{steps}\nSee {COMPLETION_DOCS}")
+}
+
 /// Everything gathered for a run, and how fresh it was.
 struct Gathered {
     remotes: Vec<RemoteRepo>,
@@ -1223,6 +1281,97 @@ mod tests {
     #[test]
     fn the_command_surface_is_well_formed() {
         Cli::command().debug_assert();
+    }
+
+    /// Driven by the shells `clap_complete` offers rather than by a list
+    /// written here, so a shell added by a future version is caught rather
+    /// than left with the fallback wording.
+    #[test]
+    fn every_shell_is_told_where_its_script_goes() {
+        use clap::ValueEnum;
+
+        for shell in clap_complete::Shell::value_variants() {
+            let hint = completion_hint(*shell);
+
+            assert!(
+                hint.contains("minato"),
+                "the {shell} hint never names the binary: {hint}"
+            );
+            assert!(
+                hint.contains(COMPLETION_DOCS),
+                "the {shell} hint never points at the instructions: {hint}"
+            );
+        }
+    }
+
+    /// The destination is the whole point of the hint, so each shell has to
+    /// name its own rather than share a generic sentence.
+    #[test]
+    fn each_shell_names_the_destination_its_own_convention_expects() {
+        use clap_complete::Shell;
+
+        for (shell, expected) in [
+            (Shell::Bash, "bash-completion/completions/minato"),
+            (Shell::Zsh, "_minato"),
+            (Shell::Fish, "completions/minato.fish"),
+            (Shell::Elvish, "minato.elv"),
+            (Shell::PowerShell, "Invoke-Expression"),
+        ] {
+            let hint = completion_hint(shell);
+
+            assert!(
+                hint.contains(expected),
+                "the {shell} hint never names {expected}: {hint}"
+            );
+        }
+    }
+
+    /// zsh and elvish need a step beyond writing the file, and a hint that
+    /// stopped at the path would leave completion silently not working.
+    ///
+    /// The lines asserted are the ones meant to be pasted, not the prose
+    /// around them: naming compinit in a sentence while printing a broken
+    /// command would read as correct and not work.
+    #[test]
+    fn the_shells_that_need_a_second_step_say_so() {
+        let zsh = completion_hint(clap_complete::Shell::Zsh);
+
+        for line in [
+            "fpath=(~/.zfunc $fpath)",
+            "autoload -Uz compinit && compinit",
+        ] {
+            assert!(
+                zsh.contains(line),
+                "the zsh hint never prints `{line}`: {zsh}"
+            );
+        }
+
+        // The directory oh-my-zsh already has on $fpath, where the compinit
+        // lines above are unnecessary.
+        assert!(
+            zsh.contains("~/.oh-my-zsh/custom/completions"),
+            "the zsh hint never names the oh-my-zsh directory: {zsh}"
+        );
+
+        let elvish = completion_hint(clap_complete::Shell::Elvish);
+        assert!(
+            elvish.contains("use minato"),
+            "the elvish hint never mentions loading the module: {elvish}"
+        );
+    }
+
+    /// The hint goes to standard error precisely so that a redirect captures
+    /// the script alone, so nothing of it may leak into the returned text.
+    #[test]
+    fn the_hint_stays_out_of_the_script() {
+        use clap::ValueEnum;
+
+        for shell in clap_complete::Shell::value_variants() {
+            assert!(
+                !completions(*shell).contains(COMPLETION_DOCS),
+                "the {shell} script carries the hint that belongs on stderr"
+            );
+        }
     }
 
     #[test]

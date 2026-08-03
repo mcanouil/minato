@@ -199,7 +199,9 @@ Check that configuration and tooling are usable
 
 Print a shell completion script.
 
-Written to standard output rather than to a file, because where a completion script belongs is the shell's business rather than something minato should decide. It is generated from the command definitions, so it cannot describe a command the binary does not have.
+The script goes to standard output and where to put it goes to standard error, so `minato completions zsh > _minato` writes the script alone while the instructions still reach the terminal. Run it without redirecting to read them, or see <https://m.canouil.dev/minato/get-started/#enable-completion>.
+
+It is generated from the command definitions, so it cannot describe a command the binary does not have, and it needs regenerating after an upgrade that adds one.
 
 **Usage:** `minato completions <SHELL>`
 
