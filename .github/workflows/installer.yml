@@ -49,7 +49,7 @@ jobs:
 
   smoke:
     name: Install with ${{ matrix.name }}
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       # pwsh is PowerShell 7; powershell is Windows PowerShell 5.1, which is what
@@ -57,11 +57,23 @@ jobs:
       # runs, so both have to work. The step itself is always pwsh, and starts
       # the interpreter under test as a child process, because an expression is
       # not allowed in a step's `shell`.
+      #
+      # The runner is a dimension of its own because Get-Target reads the
+      # machine's architecture: only a native ARM64 runner takes the
+      # aarch64-pc-windows-msvc branch and installs that archive.
       matrix:
         include:
-          - name: PowerShell 7
+          - name: x64, PowerShell 7
+            os: windows-latest
             exe: pwsh
-          - name: Windows PowerShell 5.1
+          - name: x64, Windows PowerShell 5.1
+            os: windows-latest
+            exe: powershell
+          - name: ARM64, PowerShell 7
+            os: windows-11-arm
+            exe: pwsh
+          - name: ARM64, Windows PowerShell 5.1
+            os: windows-11-arm
             exe: powershell
     steps:
       - uses: actions/checkout@v7
