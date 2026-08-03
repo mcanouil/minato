@@ -184,22 +184,68 @@ function Test-Provenance {
     if ($LASTEXITCODE -ne 0) { throw 'Build provenance verification failed.' }
 }
 
+function Publish-EnvironmentChange {
+    # A process started from Explorer inherits Explorer's environment, and
+    # Explorer only rereads the registry when it is told the block changed.
+    # Without this, a terminal opened after the install would not see the
+    # directory until the next sign-in.
+    #
+    # The registry already holds the new PATH by the time this runs, so failing
+    # here costs a sign-in rather than the entry itself. Compiling the call can
+    # be refused outright on a locked-down machine, which is not worth telling
+    # the user their PATH was not updated over.
+    try {
+        if (-not ('Minato.NativeMethods' -as [type])) {
+            Add-Type -Namespace 'Minato' -Name 'NativeMethods' -MemberDefinition @'
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern IntPtr SendMessageTimeout(
+    IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
+    uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+'@
+        }
+        $result = [UIntPtr]::Zero
+        # HWND_BROADCAST, WM_SETTINGCHANGE, SMTO_ABORTIFHUNG, five seconds.
+        [Minato.NativeMethods]::SendMessageTimeout(
+            [IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 0x0002, 5000, [ref]$result) | Out-Null
+    }
+    catch {
+        Write-Warn "Could not announce the environment change; a sign-out and back in will apply it. ($($_.Exception.Message))"
+    }
+}
+
 function Add-UserPathEntry {
     param([string]$Directory)
 
-    # The User scope specifically, read and written: $env:Path is the machine
-    # and user values already merged, so writing that back would copy the whole
-    # machine PATH into this user's own, permanently.
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $entries = @()
-    if ($userPath) { $entries = @($userPath -split ';' | Where-Object { $_ -ne '' }) }
+    # The user's own PATH, read and written through the registry rather than
+    # through [Environment]::SetEnvironmentVariable. That call hands back an
+    # expanded value and stores an expanded value, so a PATH carrying
+    # %USERPROFILE%\bin would come back with today's expansion baked in and stop
+    # following the variable. Reading the user scope on its own also matters:
+    # $env:Path is the machine and user values already merged, and writing that
+    # back would copy the whole machine PATH into this user's own.
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    if (-not $key) { $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment') }
+    try {
+        $current = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $entries = @($current -split ';' | Where-Object { $_ -ne '' })
 
-    $normalised = $Directory.TrimEnd('\')
-    foreach ($entry in $entries) {
-        if ($entry.TrimEnd('\') -eq $normalised) { return $false }
+        $normalised = $Directory.TrimEnd('\')
+        foreach ($entry in $entries) {
+            if ($entry.TrimEnd('\') -eq $normalised) { return $false }
+        }
+
+        # Keep whichever kind the value already has, so an entry naming a
+        # variable stays expandable; ExpandString is the default for a PATH that
+        # does not exist yet and therefore has no kind to keep.
+        $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+        if ($key.GetValueNames() -contains 'Path') { $kind = $key.GetValueKind('Path') }
+        $key.SetValue('Path', (@($entries) + $Directory) -join ';', $kind)
+    }
+    finally {
+        $key.Dispose()
     }
 
-    [Environment]::SetEnvironmentVariable('Path', (@($entries) + $Directory) -join ';', 'User')
+    Publish-EnvironmentChange
     # Usable in this session too, not only in the ones opened after it.
     $env:Path = "$env:Path;$Directory"
     return $true
@@ -298,8 +344,17 @@ try {
     Write-Plain
 
     if ($modifyPath) {
-        if (Add-UserPathEntry -Directory $installDir) {
-            Write-Info "Added $installDir to your PATH. Open a new terminal for it to take effect."
+        # The binary is already in place by now, so a PATH that could not be
+        # written is worth a warning and instructions rather than a failure.
+        try {
+            if (Add-UserPathEntry -Directory $installDir) {
+                Write-Info "Added $installDir to your PATH. Open a new terminal for it to take effect."
+                Write-Plain
+            }
+        }
+        catch {
+            Write-Warn "Could not add $installDir to your PATH: $($_.Exception.Message)"
+            Write-Plain "  `$env:Path += `";$installDir`""
             Write-Plain
         }
     }

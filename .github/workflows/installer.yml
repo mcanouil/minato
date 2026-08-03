@@ -81,3 +81,39 @@ jobs:
 
           & (Join-Path $dir 'minato.exe') --version
           if ($LASTEXITCODE -ne 0) { throw 'The installed binary did not run.' }
+
+  path:
+    name: Add to PATH
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The only place this can be exercised: it writes the user's environment
+      # in the registry, and the runner is thrown away afterwards.
+      - name: Install and check what happened to the user PATH
+        shell: pwsh
+        run: |
+          $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+          # An entry naming a variable, which an expanded read and write back
+          # would silently replace with today's value of that variable.
+          $seeded = '%USERPROFILE%\seeded'
+          $key.SetValue('Path', $seeded, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+          $key.Dispose()
+
+          $dir = Join-Path $env:RUNNER_TEMP 'minato-path'
+          .\docs\install.ps1 -Dir $dir
+          if ($LASTEXITCODE -ne 0) { throw 'The installer failed.' }
+          # Again: adding a directory that is already there must be a no-op.
+          .\docs\install.ps1 -Dir $dir
+          if ($LASTEXITCODE -ne 0) { throw 'The second install failed.' }
+
+          $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+          $raw = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+          $kind = $key.GetValueKind('Path')
+          $key.Dispose()
+          Write-Output "user PATH: $raw ($kind)"
+
+          $entries = @($raw -split ';' | Where-Object { $_ -ne '' })
+          if ($entries -notcontains $seeded) { throw "The seeded entry $seeded did not survive: $raw" }
+          if ($kind -ne [Microsoft.Win32.RegistryValueKind]::ExpandString) { throw "The value kind became $kind." }
+          if (@($entries | Where-Object { $_ -eq $dir }).Count -ne 1) { throw "$dir is not present exactly once: $raw" }
