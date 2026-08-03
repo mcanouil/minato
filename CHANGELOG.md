@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- fix!: `--owner`, `--group`, `--state`, and `--include-external` now belong to each command rather than to `minato` itself, so they must be written after the command: `minato status --group perso`, not `minato --group perso status`, which clap now refuses with a tip naming the right form. Every documented example already used the first form. This is what lets a command's help and its completion script offer only the conditions it can act on; naming one it cannot is still refused with the explanation that names the command which does take it, rather than a bare "unexpected argument" (#91).
+
 ### Features
 
 - feat: report a stale shell completion script in `minato doctor`, comparing each one it finds against what the binary would generate now and printing the command that rewrites it, so a script left offering the commands of an older release is noticed rather than quietly wrong (#89).
