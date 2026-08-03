@@ -222,7 +222,23 @@ pub struct InapplicableNarrowingError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::Parser;
+    use clap::{CommandFactory, Parser};
+
+    /// Every subcommand, invoked with the least it needs to parse.
+    const EVERY_COMMAND: &[&[&str]] = &[
+        &["minato", "list"],
+        &["minato", "status"],
+        &["minato", "clone"],
+        &["minato", "fetch"],
+        &["minato", "update"],
+        &["minato", "sync-fork"],
+        &["minato", "move", "repo", "--to-group", "demo"],
+        &["minato", "refresh"],
+        &["minato", "auth", "status"],
+        &["minato", "doctor"],
+        &["minato", "completions", "bash"],
+        &["minato", "tui"],
+    ];
 
     /// The refusal for a command line, or a panic naming what was accepted.
     fn refusal(arguments: &[&str]) -> String {
@@ -360,6 +376,28 @@ mod tests {
             assert!(
                 message.contains(flag),
                 "a run should be corrected once rather than a flag at a time: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_refusal_names_a_command_the_binary_actually_has() {
+        let subcommands: Vec<String> = Cli::command()
+            .get_subcommands()
+            .map(|subcommand| subcommand.get_name().to_owned())
+            .collect();
+
+        for arguments in EVERY_COMMAND {
+            let cli = Cli::try_parse_from(*arguments).expect("the arguments should parse");
+            let named = narrowable(&cli.command).command;
+
+            // `auth status` names a subcommand of a subcommand, so only the
+            // first word is one of the top-level names.
+            let top_level = named.split_whitespace().next().expect("a command name");
+
+            assert!(
+                subcommands.iter().any(|name| name == top_level),
+                "a refusal would tell someone to type `{named}`, which is not one of {subcommands:?}"
             );
         }
     }
