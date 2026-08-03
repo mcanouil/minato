@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - feat: let groups nest as the directory tree does, so a clone in `perso/apps` is in the group `perso/apps` rather than reported as `perso`, with `--group perso` keeping everything filed beneath it and `--to-group` and `--into-group` accepting a nested group.
+- feat: print a shell completion script with `minato completions <shell>`, for bash, zsh, fish, PowerShell, and elvish, generated from the command definitions so it can never offer a command the binary does not have.
 
 ### Bug Fixes
 

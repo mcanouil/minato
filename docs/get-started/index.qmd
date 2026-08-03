@@ -62,6 +62,70 @@ See [`CONTRIBUTING.md`](https://github.com/mcanouil/minato/blob/main/CONTRIBUTIN
 Minato shells out to `git`, so it needs a `git` binary on `PATH`.
 Doing so is deliberate: your SSH agent, credential helpers, and `git` configuration all apply unchanged.
 
+## Enable completion
+
+`minato completions <shell>` prints a completion script to standard output, for `bash`, `zsh`, `fish`, `powershell`, and `elvish`.
+Where it belongs is your shell's business rather than Minato's, so send it wherever your shell looks.
+
+::: {.panel-tabset}
+
+### bash
+
+```{.bash filename="Terminal"}
+mkdir -p ~/.local/share/bash-completion/completions
+minato completions bash > ~/.local/share/bash-completion/completions/minato
+```
+
+### zsh
+
+The destination has to be a directory on `$fpath`, and `compinit` has to run after it is added.
+
+```{.bash filename="Terminal"}
+mkdir -p ~/.zfunc
+minato completions zsh > ~/.zfunc/_minato
+```
+
+```{.bash filename="~/.zshrc"}
+fpath=(~/.zfunc $fpath)
+autoload -Uz compinit && compinit
+```
+
+### fish
+
+```{.bash filename="Terminal"}
+mkdir -p ~/.config/fish/completions
+minato completions fish > ~/.config/fish/completions/minato.fish
+```
+
+### PowerShell
+
+```{.powershell filename="PowerShell"}
+minato completions powershell | Out-String | Invoke-Expression
+```
+
+Append that line to the file `$PROFILE` names to have it apply to every session.
+
+### elvish
+
+```{.bash filename="Terminal"}
+mkdir -p ~/.config/elvish/lib
+minato completions elvish > ~/.config/elvish/lib/minato.elv
+```
+
+```{.bash filename="~/.config/elvish/rc.elv"}
+use minato
+```
+
+:::
+
+Open a new shell, then `minato <Tab>` lists the commands and `minato clone --<Tab>` lists that command's flags.
+
+The script comes from the same definitions the binary is built from, so it can never offer a command that does not exist.
+It does have to be regenerated after an upgrade that adds one.
+
+In `bash`, `zsh`, and `fish`, flags with a fixed set of values complete those too, so `minato status --state <Tab>` offers all eight states.
+The `powershell` and `elvish` scripts complete commands and flag names only.
+
 ## Authenticate
 
 No token is ever stored by Minato.

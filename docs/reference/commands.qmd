@@ -23,6 +23,7 @@ Overview and sync of Git repositories across hosting providers
 * `refresh` — Discard cached data so the next run asks the provider again
 * `auth` — Inspect authentication
 * `doctor` — Check that configuration and tooling are usable
+* `completions` — Print a shell completion script
 * `tui` — Browse repositories interactively
 
 ###### **Options:**
@@ -183,6 +184,23 @@ Report whether a token was found, and where it came from
 Check that configuration and tooling are usable
 
 **Usage:** `minato doctor`
+
+
+
+## `minato completions`
+
+Print a shell completion script.
+
+Written to standard output rather than to a file, because where a completion script belongs is the shell's business rather than something minato should decide. It is generated from the command definitions, so it cannot describe a command the binary does not have.
+
+**Usage:** `minato completions <SHELL>`
+
+###### **Arguments:**
+
+* `<SHELL>` — Which shell to generate for
+
+  Possible values: `bash`, `elvish`, `fish`, `powershell`, `zsh`
+
 
 
 

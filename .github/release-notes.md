@@ -57,6 +57,16 @@ devcontainer up --workspace-folder .
 devcontainer exec --workspace-folder . cargo install --path .
 ```
 
+### Shell completion
+
+Once `minato` is on `PATH`, it prints its own completion script for `bash`, `zsh`, `fish`, `powershell`, and `elvish`:
+
+```bash
+minato completions zsh > ~/.zfunc/_minato
+```
+
+Where each shell looks for it is at <https://m.canouil.dev/minato/get-started/#enable-completion>.
+
 ## Verify what you downloaded
 
 Beyond the checksum, every archive carries build provenance, so you can confirm it came from this repository's workflow and not from somewhere else:

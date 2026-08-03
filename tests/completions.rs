@@ -1,0 +1,95 @@
+//! The completion scripts the binary prints.
+//!
+//! These go through the command surface exactly as the binary does, rather
+//! than calling the generator directly, so what is asserted is what a user
+//! redirects into their shell.
+
+use clap::{CommandFactory, Parser, ValueEnum};
+use minato::cli::{self, Cli};
+
+/// Runs a command as the binary would, returning what it would print.
+async fn output_of(arguments: &[&str]) -> String {
+    let cli = Cli::parse_from(arguments);
+
+    cli::run(&cli)
+        .await
+        .expect("the command to produce output")
+        .text
+}
+
+/// A command tree with conflicting flags or duplicate names panics the first
+/// time it is built, which for a completion script would be at generation.
+/// Asserting it here names the problem in a test run instead.
+#[test]
+fn the_command_tree_is_internally_valid() {
+    Cli::command().debug_assert();
+}
+
+/// Driven by the shells `clap_complete` offers rather than by a list written
+/// here, so a shell added by a future version is covered rather than silently
+/// missed.
+#[tokio::test]
+async fn every_shell_generates_a_script_naming_the_binary_and_its_commands() {
+    for shell in clap_complete::Shell::value_variants() {
+        let script = output_of(&["minato", "completions", &shell.to_string()]).await;
+
+        assert!(!script.trim().is_empty(), "{shell} produced no script");
+        assert!(
+            script.contains("minato"),
+            "{shell} produced a script that never names the binary"
+        );
+        // A generator that emitted a valid but empty skeleton would satisfy
+        // everything above, so require a subcommand only this binary has.
+        assert!(
+            script.contains("sync-fork"),
+            "{shell} produced a script that offers no subcommands"
+        );
+    }
+}
+
+/// The script is the whole output, so anything printed alongside it would be
+/// sourced by the shell as if it were code.
+#[tokio::test]
+async fn a_script_carries_nothing_but_itself() {
+    let script = output_of(&["minato", "completions", "fish"]).await;
+
+    assert!(
+        script.starts_with('#') || script.starts_with("function") || script.starts_with("complete"),
+        "the fish script opens with something that is not fish: {:?}",
+        script.lines().next()
+    );
+}
+
+/// Flag values that derive `ValueEnum` complete on their own, and `--state` is
+/// the one users reach for most, so its values reaching the script is the
+/// difference between completing a filter and typing it out.
+///
+/// Only bash, zsh, and fish are checked: `clap_complete`'s elvish and PowerShell
+/// generators emit flag names without their possible values, which the
+/// documentation says rather than this test pretending otherwise.
+#[tokio::test]
+async fn state_values_reach_the_shells_that_carry_them() {
+    for shell in ["bash", "zsh", "fish"] {
+        let script = output_of(&["minato", "completions", shell]).await;
+
+        for state in ["not-cloned", "in-sync", "diverged", "drifted"] {
+            assert!(
+                script.contains(state),
+                "the {shell} script never offers {state}"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_unknown_shell_is_refused_with_the_ones_that_work() {
+    let error = Cli::try_parse_from(["minato", "completions", "nonsense"])
+        .expect_err("an unknown shell to be rejected");
+    let message = error.to_string();
+
+    assert!(message.contains("nonsense"), "{message}");
+    assert!(
+        message.contains("bash") && message.contains("zsh"),
+        "{message}"
+    );
+}

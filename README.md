@@ -96,6 +96,18 @@ An update is only ever a fast-forward, so if the situation has been misjudged, g
 Provider responses are cached for fifteen minutes.
 Cached output says how old it is, so stale data never passes for fresh, and it stays readable with no network at all.
 
+## Completion
+
+`minato completions <shell>` prints a completion script for `bash`, `zsh`, `fish`, `powershell`, or `elvish`.
+
+```sh
+minato completions zsh > ~/.zfunc/_minato
+```
+
+It goes to standard output rather than to a path Minato picks, because where a completion script belongs is the shell's business.
+The script is generated from the command definitions, so it offers exactly the commands and flags the binary has.
+Where each shell looks for it is in [Get started](https://m.canouil.dev/minato/get-started/#enable-completion).
+
 ## Documentation
 
 The documentation website is a Quarto project under [`docs/`](docs), covering the design note now and the command reference as commands land.
