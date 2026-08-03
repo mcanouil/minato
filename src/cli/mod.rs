@@ -8,7 +8,7 @@ mod render;
 
 use std::path::{Path, PathBuf};
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use jiff::{SignedDuration, Timestamp};
 use serde::Serialize;
 use std::fmt::Write as _;
@@ -161,6 +161,17 @@ pub enum Command {
     /// Check that configuration and tooling are usable.
     Doctor,
 
+    /// Print a shell completion script.
+    ///
+    /// Written to standard output rather than to a file, because where a
+    /// completion script belongs is the shell's business rather than
+    /// something minato should decide. It is generated from the command
+    /// definitions, so it cannot describe a command the binary does not have.
+    Completions {
+        /// Which shell to generate for.
+        shell: clap_complete::Shell,
+    },
+
     /// Browse repositories interactively.
     Tui,
 }
@@ -272,6 +283,7 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
             command: AuthCommand::Status,
         } => Ok(auth_status(cli.json).into()),
         Command::Doctor => doctor(cli.json).map(Into::into),
+        Command::Completions { shell } => Ok(completions(*shell).into()),
         Command::Tui => tui(cli).await,
         Command::Refresh => refresh(cli.json).map(Into::into),
         Command::List => list(cli).await.map(Into::into),
@@ -793,6 +805,20 @@ fn refresh(as_json: bool) -> Result<String, CliError> {
     Ok(format!("Cleared {}.", paths.cache.root().display()))
 }
 
+/// Generates a completion script for a shell.
+///
+/// The name completed is the one the command carries rather than the one it
+/// was invoked by, so a script written from a build directory, or from a copy
+/// under another name, still completes the command as it is installed.
+fn completions(shell: clap_complete::Shell) -> String {
+    let mut command = Cli::command();
+    let name = command.get_name().to_owned();
+    let mut script = Vec::new();
+    clap_complete::generate(shell, &mut command, name, &mut script);
+
+    String::from_utf8(script).expect("clap_complete writes UTF-8")
+}
+
 /// Everything gathered for a run, and how fresh it was.
 struct Gathered {
     remotes: Vec<RemoteRepo>,
@@ -1168,7 +1194,6 @@ fn describe_notes(comparison: &Comparison) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::CommandFactory;
 
     #[test]
     fn the_command_surface_is_well_formed() {
