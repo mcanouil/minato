@@ -100,11 +100,14 @@ jobs:
           $key.SetValue('Path', $seeded, [Microsoft.Win32.RegistryValueKind]::ExpandString)
           $key.Dispose()
 
+          # Started as a child process, as the smoke job does: a script that
+          # succeeds never calls exit, so $LASTEXITCODE would say nothing about
+          # a run made in this session.
           $dir = Join-Path $env:RUNNER_TEMP 'minato-path'
-          .\docs\install.ps1 -Dir $dir
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File .\docs\install.ps1 -Dir $dir
           if ($LASTEXITCODE -ne 0) { throw 'The installer failed.' }
           # Again: adding a directory that is already there must be a no-op.
-          .\docs\install.ps1 -Dir $dir
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File .\docs\install.ps1 -Dir $dir
           if ($LASTEXITCODE -ne 0) { throw 'The second install failed.' }
 
           $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
