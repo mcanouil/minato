@@ -342,6 +342,30 @@ fn finds_clones_nested_under_a_layout() {
 }
 
 #[test]
+fn reads_a_group_from_every_directory_between_the_root_and_the_clone() {
+    let root = tempfile::tempdir().expect("a temporary directory");
+
+    for path in ["perso/apps/minato", "perso/saga", "loose"] {
+        let full = root.path().join(path);
+        init_repository(&full);
+        commit(&full, "first");
+    }
+
+    let found = scan::scan(
+        &roots(vec![root.path().to_owned()]),
+        scan::DEFAULT_MAX_DEPTH,
+    );
+
+    let groups: Vec<Option<&str>> = found
+        .repositories
+        .iter()
+        .map(|repository| repository.group.as_deref())
+        .collect();
+
+    assert_eq!(groups, [None, Some("perso/apps"), Some("perso")]);
+}
+
+#[test]
 fn does_not_descend_into_a_clone_it_has_already_found() {
     let root = tempfile::tempdir().expect("a temporary directory");
     let outer = root.path().join("outer");

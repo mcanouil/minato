@@ -81,6 +81,7 @@ Everything else is reported with the reason it was left alone.
 ### Groups by your own tree
 
 A group is a directory beneath a root, so the folders you already keep become the grouping, with nothing to configure.
+Groups nest as the tree does, and naming `perso` takes `perso/apps` with it.
 :::
 
 ::: {.card-item}

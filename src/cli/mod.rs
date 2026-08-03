@@ -44,8 +44,11 @@ pub struct Cli {
     #[arg(long = "owner", global = true, value_name = "OWNER")]
     pub owners: Vec<String>,
 
-    /// Keep only repositories in these groups, which are the directories
-    /// beneath a root.
+    /// Keep only repositories in these groups, and in the groups beneath them.
+    ///
+    /// A group is a directory path beneath a root, written with `/`, so
+    /// `--group perso` keeps `perso` and everything filed under it, including
+    /// `perso/apps`, while `--group perso/apps` keeps only that bucket.
     #[arg(long = "group", global = true, value_name = "GROUP")]
     pub groups: Vec<String>,
 
@@ -84,8 +87,8 @@ pub enum Command {
         #[arg(long, value_name = "DIRECTORY")]
         into: Option<PathBuf>,
 
-        /// Put them in this group, which is the directory that group already
-        /// occupies beneath a root.
+        /// Put them in this group, which is the directory path that group
+        /// already occupies beneath a root, such as `perso/apps`.
         ///
         /// This is not the same as the `--group` filter, which selects by
         /// where a clone already sits. A repository that has not been cloned
@@ -136,7 +139,8 @@ pub enum Command {
         #[arg(value_name = "REPOSITORY")]
         repository: String,
 
-        /// The group to move it into, which is a directory beneath its root.
+        /// The group to move it into, which is a directory path beneath its
+        /// root, such as `perso/apps`.
         #[arg(long = "to-group", value_name = "GROUP")]
         group: String,
 
@@ -344,9 +348,8 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
             // repositories already live rather than repeating the path.
             let destination = match (into, group) {
                 (Some(into), _) => into,
-                (None, Some(group)) => {
-                    directory_for_group(&roots, &group).unwrap_or_else(|| root.join(&group))
-                }
+                (None, Some(group)) => directory_for_group(&roots, &group)
+                    .unwrap_or_else(|| actions::group_path(&root, &group)),
                 (None, None) => root,
             };
 
@@ -598,7 +601,8 @@ async fn tui(cli: &Cli) -> Result<Output, CliError> {
                     let destination = group.as_deref().map_or_else(
                         || root.clone(),
                         |group| {
-                            directory_for_group(&roots, group).unwrap_or_else(|| root.join(group))
+                            directory_for_group(&roots, group)
+                                .unwrap_or_else(|| actions::group_path(root, group))
                         },
                     );
 
@@ -1052,7 +1056,7 @@ fn append_scan_notes(out: &mut String, scanned: &scan::Scan) {
 fn directory_for_group(roots: &[PathBuf], group: &str) -> Option<PathBuf> {
     roots
         .iter()
-        .map(|root| root.join(group))
+        .map(|root| actions::group_path(root, group))
         .find(|candidate| candidate.is_dir())
 }
 
@@ -1143,6 +1147,24 @@ mod tests {
     #[test]
     fn the_command_surface_is_well_formed() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn a_nested_group_resolves_to_the_directory_it_already_occupies() {
+        let root = tempfile::tempdir().expect("a temporary directory");
+        std::fs::create_dir_all(root.path().join("perso/apps")).expect("a group directory");
+
+        let roots = vec![PathBuf::from("/nonexistent"), root.path().to_owned()];
+
+        assert_eq!(
+            directory_for_group(&roots, "perso/apps"),
+            Some(root.path().join("perso/apps"))
+        );
+        assert_eq!(
+            directory_for_group(&roots, "perso/data"),
+            None,
+            "a group with no directory anywhere is left for the caller to create"
+        );
     }
 
     #[test]

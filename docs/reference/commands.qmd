@@ -30,7 +30,9 @@ Overview and sync of Git repositories across hosting providers
 * `--json` — Emit JSON instead of a table
 * `--refresh` — Ignore cached data and ask the provider again
 * `--owner <OWNER>` — Keep only repositories owned by these accounts
-* `--group <GROUP>` — Keep only repositories in these groups, which are the directories beneath a root
+* `--group <GROUP>` — Keep only repositories in these groups, and in the groups beneath them.
+
+   A group is a directory path beneath a root, written with `/`, so `--group perso` keeps `perso` and everything filed under it, including `perso/apps`, while `--group perso/apps` keeps only that bucket.
 * `--state <STATE>` — Keep only repositories in these states
 
   Possible values:
@@ -83,7 +85,7 @@ Clone repositories that have no local copy
 * `--into <DIRECTORY>` — Where to put them. Defaults to the first configured root.
 
    Where a repository belongs is a judgement its identity does not carry, so it is chosen here rather than derived.
-* `--into-group <GROUP>` — Put them in this group, which is the directory that group already occupies beneath a root.
+* `--into-group <GROUP>` — Put them in this group, which is the directory path that group already occupies beneath a root, such as `perso/apps`.
 
    This is not the same as the `--group` filter, which selects by where a clone already sits. A repository that has not been cloned is in no group, so filtering by one would match nothing.
 * `--dry-run` — Report what would be cloned, and change nothing
@@ -143,7 +145,7 @@ Deliberately one repository at a time: this changes the filesystem, so it is nev
 
 ###### **Options:**
 
-* `--to-group <GROUP>` — The group to move it into, which is a directory beneath its root
+* `--to-group <GROUP>` — The group to move it into, which is a directory path beneath its root, such as `perso/apps`
 * `--dry-run` — Report what would move, and change nothing
 
 

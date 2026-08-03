@@ -337,9 +337,9 @@ pub enum MoveError {
         group: String,
     },
 
-    /// The group is not a plain directory name.
+    /// The group is not a directory path beneath a root.
     #[error(
-        "`{group}` is not a valid group; a group is a single directory beneath a root, so it cannot contain `/`, `\\`, or be `.` or `..`"
+        "`{group}` is not a valid group; a group is a directory path beneath a root, written with `/`, so no part of it can be empty, `.` or `..`, and it cannot contain `\\`"
     )]
     InvalidGroup {
         /// The offending group.
@@ -358,6 +358,20 @@ pub enum MoveError {
     },
 }
 
+/// The directory a group occupies beneath `root`.
+///
+/// A group is written with `/` whatever the platform separates paths with, so
+/// its segments are joined one at a time rather than handed to `Path::join` as
+/// a single string.
+#[must_use]
+pub fn group_path(root: &Path, group: &str) -> PathBuf {
+    group
+        .split('/')
+        .fold(root.to_owned(), |directory, segment| {
+            directory.join(segment)
+        })
+}
+
 /// Where a repository would end up when moved into a group.
 ///
 /// It keeps its directory name, which is not always the repository name: a
@@ -368,7 +382,16 @@ pub fn move_destination(path: &Path, root: &Path, group: &str) -> PathBuf {
         .file_name()
         .map_or_else(|| path.to_owned(), PathBuf::from);
 
-    root.join(group).join(name)
+    group_path(root, group).join(name)
+}
+
+/// Whether a group names a directory path beneath a root.
+fn is_valid_group(group: &str) -> bool {
+    !group.is_empty()
+        && !group.contains('\\')
+        && group
+            .split('/')
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 /// Finds the one repository the user meant.
@@ -431,10 +454,12 @@ pub fn move_to_group(
     group: &str,
     mode: Mode,
 ) -> Result<Report, MoveError> {
-    // A group names a single directory beneath a root. Anything with a path
-    // separator, or `.`/`..`, would move the clone outside the group tree or
-    // out of the root entirely, so it is refused before any path is built.
-    if group.is_empty() || group == "." || group == ".." || group.contains(['/', '\\']) {
+    // A group names a directory path beneath a root, written with `/`. An
+    // empty segment, `.` or `..` would move the clone somewhere else in the
+    // tree or out of the root entirely, and a backslash is a legal character
+    // in a directory name on Unix, so neither is guessed at: both are refused
+    // before any path is built.
+    if !is_valid_group(group) {
         return Err(MoveError::InvalidGroup {
             group: group.to_owned(),
         });
@@ -742,10 +767,20 @@ mod moving {
     }
 
     #[test]
-    fn refuses_a_group_name_that_is_not_a_plain_directory() {
+    fn refuses_a_group_name_that_is_not_a_directory_path_beneath_a_root() {
         let repository = cloned("minato", Some("perso"), "/code/perso/minato");
 
-        for bad in ["../evil", "a/b", "..", ".", ""] {
+        for bad in [
+            "../evil",
+            "perso/../evil",
+            "perso//apps",
+            "/perso",
+            "perso/",
+            "perso\\apps",
+            "..",
+            ".",
+            "",
+        ] {
             assert!(
                 matches!(
                     move_to_group(&repository, "minato", &roots(), bad, Mode::DryRun),
@@ -754,6 +789,44 @@ mod moving {
                 "group `{bad}` should be rejected as invalid"
             );
         }
+    }
+
+    #[test]
+    fn a_nested_group_names_the_directories_it_is_written_with() {
+        let repository = cloned("minato", Some("perso"), "/code/perso/minato");
+
+        let report = move_to_group(&repository, "minato", &roots(), "perso/apps", Mode::DryRun)
+            .expect("a plan");
+
+        assert_eq!(report.path, Some(PathBuf::from("/code/perso/apps/minato")));
+        assert_eq!(
+            move_destination(
+                Path::new("/code/perso/minato"),
+                Path::new("/code"),
+                "perso/apps"
+            ),
+            PathBuf::from("/code/perso/apps/minato")
+        );
+    }
+
+    #[test]
+    fn moving_out_of_a_nested_group_into_its_parent_is_an_ordinary_move() {
+        let repository = cloned("minato", Some("perso/apps"), "/code/perso/apps/minato");
+
+        let report =
+            move_to_group(&repository, "minato", &roots(), "perso", Mode::DryRun).expect("a plan");
+
+        assert_eq!(report.path, Some(PathBuf::from("/code/perso/minato")));
+    }
+
+    #[test]
+    fn a_repository_already_in_a_nested_group_is_not_moved_onto_itself() {
+        let repository = cloned("minato", Some("perso/apps"), "/code/perso/apps/minato");
+
+        assert!(matches!(
+            move_to_group(&repository, "minato", &roots(), "perso/apps", Mode::DryRun),
+            Err(MoveError::AlreadyThere { .. })
+        ));
     }
 
     #[test]
