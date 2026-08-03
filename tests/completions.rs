@@ -4,7 +4,7 @@
 //! than calling the generator directly, so what is asserted is what a user
 //! redirects into their shell.
 
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{Parser, ValueEnum};
 use minato::cli::{self, Cli};
 
 /// Runs a command as the binary would, returning what it would print.
@@ -15,14 +15,6 @@ async fn output_of(arguments: &[&str]) -> String {
         .await
         .expect("the command to produce output")
         .text
-}
-
-/// A command tree with conflicting flags or duplicate names panics the first
-/// time it is built, which for a completion script would be at generation.
-/// Asserting it here names the problem in a test run instead.
-#[test]
-fn the_command_tree_is_internally_valid() {
-    Cli::command().debug_assert();
 }
 
 /// Driven by the shells `clap_complete` offers rather than by a list written

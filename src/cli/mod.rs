@@ -1194,7 +1194,6 @@ fn describe_notes(comparison: &Comparison) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::CommandFactory;
 
     #[test]
     fn the_command_surface_is_well_formed() {
