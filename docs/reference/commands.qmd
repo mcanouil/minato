@@ -30,11 +30,17 @@ Overview and sync of Git repositories across hosting providers
 
 * `--json` — Emit JSON instead of a table
 * `--refresh` — Ignore cached data and ask the provider again
-* `--owner <OWNER>` — Keep only repositories owned by these accounts
+* `--owner <OWNER>` — Keep only repositories owned by these accounts.
+
+   Every command that works on a selection takes this. One that names its subject outright, or touches no repository at all, refuses it rather than ignoring it.
 * `--group <GROUP>` — Keep only repositories in these groups, and in the groups beneath them.
 
    A group is a directory path beneath a root, written with `/`, so `--group perso` keeps `perso` and everything filed under it, including `perso/apps`, while `--group perso/apps` keeps only that bucket.
-* `--state <STATE>` — Keep only repositories in these states
+
+   A group is where a clone sits, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+* `--state <STATE>` — Keep only repositories in these states.
+
+   A state is how a clone stands against the remote, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
 
   Possible values:
   - `not-cloned`:
@@ -55,7 +61,9 @@ Overview and sync of Git repositories across hosting providers
     Anything that is not in sync, which is what usually wants attention
 
 * `--include-forks` — Include forks, which are hidden by default
-* `--include-external` — Include clones of repositories owned by nobody you track, which are hidden by default
+* `--include-external` — Include clones of repositories owned by nobody you track, which are hidden by default.
+
+   This describes a clone, so only the commands that scan take it: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
 
 
 

@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - fix: refuse a `--into-group`, or a group typed in the browser, that names its way out of a root, which `--to-group` already refused rather than cloning there.
+- fix: refuse `--group`, `--state`, and `--include-external` on the commands that never scan local clones, rather than accepting them and answering with the unnarrowed set: `minato list --group perso` listed every repository, including for a group that does not exist. `list` and `sync-fork` now take `--owner` alone, and `move`, `refresh`, `doctor`, `auth status`, and `completions` narrow by nothing.
 
 ## 0.2.0 (2026-07-22)
 

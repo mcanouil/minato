@@ -58,6 +58,10 @@ Every command takes `--json` for scripts and agents, and `--refresh` to ignore c
 Commands can be narrowed with `--owner`, `--group`, and `--state`, each repeatable, and combining rather than accumulating: naming an owner and a state requires both.
 `--state drifted` is shorthand for anything not in sync, which is usually what wants attention.
 
+A group and a state describe a local clone, so only the commands that scan for one act on them: `status`, `clone`, `fetch`, `update`, and `tui`.
+`list` and `sync-fork` work from what GitHub reports and never scan, so they take `--owner` alone, and `move` names its repository outright.
+A command asked to narrow by a condition it cannot act on says so and stops, rather than answering the question you did not ask.
+
 | Command                                 | What it does                                                                                                                                                                   |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `minato list`                           | Every repository the provider reports, with stars, issues, pull requests, licence, and when it was last pushed.                                                                |

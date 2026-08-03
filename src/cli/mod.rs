@@ -4,6 +4,7 @@
 //! reach any outcome without an interactive interface. Each command offers a
 //! table for reading and `--json` for consuming.
 
+mod narrowing;
 mod render;
 
 use std::path::{Path, PathBuf};
@@ -41,6 +42,10 @@ pub struct Cli {
     pub refresh: bool,
 
     /// Keep only repositories owned by these accounts.
+    ///
+    /// Every command that works on a selection takes this. One that names its
+    /// subject outright, or touches no repository at all, refuses it rather
+    /// than ignoring it.
     #[arg(long = "owner", global = true, value_name = "OWNER")]
     pub owners: Vec<String>,
 
@@ -49,10 +54,18 @@ pub struct Cli {
     /// A group is a directory path beneath a root, written with `/`, so
     /// `--group perso` keeps `perso` and everything filed under it, including
     /// `perso/apps`, while `--group perso/apps` keeps only that bucket.
+    ///
+    /// A group is where a clone sits, so only the commands that scan take
+    /// this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it
+    /// is refused rather than ignored.
     #[arg(long = "group", global = true, value_name = "GROUP")]
     pub groups: Vec<String>,
 
     /// Keep only repositories in these states.
+    ///
+    /// A state is how a clone stands against the remote, so only the commands
+    /// that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`.
+    /// Anywhere else it is refused rather than ignored.
     #[arg(long = "state", global = true, value_name = "STATE")]
     pub states: Vec<filter::StateFilter>,
 
@@ -62,6 +75,10 @@ pub struct Cli {
 
     /// Include clones of repositories owned by nobody you track, which are
     /// hidden by default.
+    ///
+    /// This describes a clone, so only the commands that scan take it:
+    /// `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is
+    /// refused rather than ignored.
     #[arg(long, global = true)]
     pub include_external: bool,
 
@@ -229,6 +246,10 @@ pub enum CliError {
     #[error(transparent)]
     Group(#[from] actions::InvalidGroupError),
 
+    /// A command was narrowed by a condition it cannot act on.
+    #[error(transparent)]
+    Narrowing(#[from] narrowing::InapplicableNarrowingError),
+
     /// Output could not be rendered.
     #[error("cannot render JSON output: {0}")]
     Json(#[from] serde_json::Error),
@@ -278,6 +299,10 @@ impl From<String> for Output {
 /// Returns an error when configuration, authentication, the provider, or the
 /// cache prevents an answer. Every variant names what to do next.
 pub async fn run(cli: &Cli) -> Result<Output, CliError> {
+    // Before anything is loaded or fetched, so a run narrowed by a condition
+    // its command cannot act on is refused rather than answered without it.
+    narrowing::check(cli)?;
+
     match &cli.command {
         Command::Auth {
             command: AuthCommand::Status,
