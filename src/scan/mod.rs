@@ -152,18 +152,17 @@ pub fn read_within(path: &Path, root: Option<&Path>) -> Result<LocalRepo, git::G
 /// Segments are joined with `/` whatever the platform separates paths with, so
 /// a group reads and compares the same everywhere.
 fn group_of(path: &Path, root: &Path) -> Option<String> {
-    let relative = path.strip_prefix(root).ok()?;
-
-    let mut segments: Vec<String> = relative
-        .components()
-        .map(|segment| segment.as_os_str().to_string_lossy().into_owned())
-        .collect();
-
     // The last segment is the repository itself, not a group, so a clone
-    // directly in the root is ungrouped.
-    segments.pop()?;
+    // directly in the root has nothing left once it is dropped.
+    let group = path.strip_prefix(root).ok()?.parent()?;
 
-    (!segments.is_empty()).then(|| segments.join("/"))
+    (!group.as_os_str().is_empty()).then(|| {
+        group
+            .components()
+            .map(|segment| segment.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/")
+    })
 }
 
 /// Whether `git status --porcelain` reported a change to a tracked file.

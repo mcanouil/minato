@@ -33,19 +33,13 @@ pub struct Filter {
 /// the whole string, so `pers` does not stand for `perso` and `apps` does not
 /// stand for `perso/apps`: a group is named from the root down.
 fn covers(wanted: &str, group: &str) -> bool {
-    let mut named = wanted.trim_end_matches('/').split('/');
-    let mut actual = group.split('/');
+    let mut segments = group.split('/');
 
-    loop {
-        let Some(named) = named.next() else {
-            return true;
-        };
-
-        match actual.next() {
-            Some(actual) if actual.eq_ignore_ascii_case(named) => {}
-            _ => return false,
-        }
-    }
+    wanted.trim_end_matches('/').split('/').all(|named| {
+        segments
+            .next()
+            .is_some_and(|segment| segment.eq_ignore_ascii_case(named))
+    })
 }
 
 /// A state named on the command line.
