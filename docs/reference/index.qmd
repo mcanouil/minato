@@ -26,6 +26,8 @@ All of them are matched without regard to case.
 `--owner` applies everywhere, including `list` and `sync-fork`.
 `--group` and `--state` describe a local clone, so they apply to the commands that read one, `status`, `tui`, and the actions, and have no effect on `list` or `sync-fork`, which work from what the provider reports.
 
+`--json` describes a report, so it has no effect on `tui`, which is a terminal to sit in, or on `completions`, whose output is a shell script and would stop being one if it were wrapped.
+
 Forks and external clones are left out by default, so the usual view is the repositories you maintain.
 A fork is any repository the provider reports as one; an external clone is one whose remote owner is not a configured account.
 Add `--include-forks` or `--include-external` to bring either back.
