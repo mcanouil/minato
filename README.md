@@ -150,7 +150,7 @@ cargo install --git https://github.com/mcanouil/minato --tag <version>
 
 ### From a released binary
 
-Every [release](https://github.com/mcanouil/minato/releases) carries a binary for macOS (Apple silicon and Intel), Linux (x86-64 and ARM64), and Windows.
+Every [release](https://github.com/mcanouil/minato/releases) carries a binary for macOS (Apple silicon and Intel), Linux (x86-64 and ARM64), and Windows (x86-64 and ARM64).
 
 ```sh
 curl -fsSLO https://github.com/mcanouil/minato/releases/download/<version>/minato-<version>-<target>.tar.gz

@@ -95,13 +95,8 @@ function Get-Target {
     $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
     switch ($architecture) {
         'X64' { return 'x86_64-pc-windows-msvc' }
-        'Arm64' {
-            # There is no aarch64-pc-windows-msvc archive to download yet, and
-            # Windows runs the x64 one under emulation in the meantime.
-            Write-Warn 'No native ARM64 build yet; installing the x64 binary, which Windows runs under emulation.'
-            return 'x86_64-pc-windows-msvc'
-        }
-        default { throw "Unsupported architecture: $architecture. minato ships a Windows binary for x64 only." }
+        'Arm64' { return 'aarch64-pc-windows-msvc' }
+        default { throw "Unsupported architecture: $architecture. minato ships Windows binaries for x64 and ARM64." }
     }
 }
 
