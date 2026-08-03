@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- fix: say where a completion script goes, printing the destination for the shell asked for on standard error alongside the script on standard output, so `minato completions zsh > _minato` writes the script alone and the instructions still reach the terminal; the help no longer declines to answer, and the zsh instructions name the oh-my-zsh directory that needs no further setup (#88).
+
 ## 0.3.0 (2026-08-03)
 
 ### Features

@@ -73,7 +73,8 @@ Doing so is deliberate: your SSH agent, credential helpers, and `git` configurat
 ## Enable completion
 
 `minato completions <shell>` prints a completion script to standard output, for `bash`, `zsh`, `fish`, `powershell`, and `elvish`.
-Where it belongs is your shell's business rather than Minato's, so send it wherever your shell looks.
+Where it goes is printed to standard error alongside it, so a redirect captures the script alone and the instructions still reach your terminal.
+The same destinations are set out below.
 
 ::: {.panel-tabset}
 
@@ -86,7 +87,16 @@ minato completions bash > ~/.local/share/bash-completion/completions/minato
 
 ### zsh
 
-The destination has to be a directory on `$fpath`, and `compinit` has to run after it is added.
+The destination has to be a directory on `$fpath`, named `_minato`, and `compinit` has to run after it is added.
+
+With oh-my-zsh, its custom completions directory is already on `$fpath` and `compinit` already runs, so writing the file is the whole of it.
+
+```{.bash filename="Terminal"}
+mkdir -p ~/.oh-my-zsh/custom/completions
+minato completions zsh > ~/.oh-my-zsh/custom/completions/_minato
+```
+
+Otherwise, pick a directory and add it yourself.
 
 ```{.bash filename="Terminal"}
 mkdir -p ~/.zfunc
