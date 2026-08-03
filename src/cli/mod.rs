@@ -785,6 +785,17 @@ fn doctor(as_json: bool) -> Result<String, CliError> {
                 true,
                 paths.cache.root().display().to_string(),
             ));
+
+            // A completion script is a copy of the command surface taken when
+            // it was generated, so an upgrade that adds a command leaves it
+            // quietly offering the old one. Nothing else would ever say so.
+            if let Some(home) = paths.home.as_deref() {
+                let zsh_custom = std::env::var_os("ZSH_CUSTOM").map(PathBuf::from);
+                let (ok, detail) =
+                    completion_check(&completion_locations(home, zsh_custom.as_deref()));
+
+                checks.push(("completions".to_owned(), ok, detail));
+            }
         }
         Err(error) => checks.push(("configuration".to_owned(), false, error.to_string())),
     }
@@ -900,6 +911,86 @@ fn completion_hint(shell: clap_complete::Shell) -> String {
     };
 
     format!("{steps}\nSee {COMPLETION_DOCS}")
+}
+
+/// Where a completion script written as `completion_hint` describes would be.
+///
+/// Every shell is searched regardless of which one is running, because
+/// `$SHELL` names the login shell rather than the one in use, and because a
+/// location only reports on itself when a file is actually there. Someone who
+/// completes in fish is not told anything about bash.
+///
+/// PowerShell is absent on purpose: its script is evaluated from `$PROFILE`
+/// rather than saved, and `$PROFILE` is a PowerShell variable rather than an
+/// environment one, so there is nothing to find from outside PowerShell.
+fn completion_locations(
+    home: &Path,
+    zsh_custom: Option<&Path>,
+) -> Vec<(clap_complete::Shell, PathBuf)> {
+    use clap_complete::Shell;
+
+    // oh-my-zsh puts this on $fpath itself, and lets it be moved with
+    // $ZSH_CUSTOM, so an installation that was relocated is still found.
+    let oh_my_zsh = zsh_custom.map_or_else(|| home.join(".oh-my-zsh/custom"), Path::to_path_buf);
+
+    vec![
+        (
+            Shell::Bash,
+            home.join(".local/share/bash-completion/completions/minato"),
+        ),
+        (Shell::Zsh, home.join(".zfunc/_minato")),
+        (Shell::Zsh, oh_my_zsh.join("completions/_minato")),
+        (
+            Shell::Fish,
+            home.join(".config/fish/completions/minato.fish"),
+        ),
+        (Shell::Elvish, home.join(".config/elvish/lib/minato.elv")),
+    ]
+}
+
+/// Whether each completion script on disk still matches the command surface.
+///
+/// The comparison is the whole script, byte for byte, against what would be
+/// generated now. That needs no version to be recorded anywhere and cannot be
+/// fooled by a release that changed a flag without changing a version the
+/// script carries.
+fn completion_check(locations: &[(clap_complete::Shell, PathBuf)]) -> (bool, String) {
+    let mut current = Vec::new();
+    let mut stale = Vec::new();
+
+    for (shell, path) in locations {
+        let Ok(found) = std::fs::read_to_string(path) else {
+            // Absent, or unreadable, which for this check are the same: there
+            // is nothing to say about a script that is not there to be used.
+            continue;
+        };
+
+        if found == completions(*shell) {
+            current.push(path.display().to_string());
+        } else {
+            stale.push(format!("  minato completions {shell} > {}", path.display()));
+        }
+    }
+
+    if stale.is_empty() {
+        return if current.is_empty() {
+            (true, "none found".to_owned())
+        } else {
+            (true, format!("current: {}", current.join(", ")))
+        };
+    }
+
+    // The first line is the whole of what the table shows, so it has to stand
+    // on its own. The commands follow underneath, one per stale script, since
+    // the command to run is the answer and it differs per shell and per path.
+    let detail = format!(
+        "{} of {} found out of date\nRegenerate:\n{}",
+        stale.len(),
+        stale.len() + current.len(),
+        stale.join("\n")
+    );
+
+    (false, detail)
 }
 
 /// Everything gathered for a run, and how fresh it was.
@@ -1302,6 +1393,99 @@ mod tests {
                 "the {shell} hint never points at the instructions: {hint}"
             );
         }
+    }
+
+    /// The locations doctor searches have to be the ones the hint tells people
+    /// to use, or a script written where it was asked for goes unnoticed.
+    #[test]
+    fn the_places_searched_are_the_places_the_hint_names() {
+        let home = Path::new("/home/someone");
+        let locations = completion_locations(home, None);
+
+        for expected in [
+            "/home/someone/.local/share/bash-completion/completions/minato",
+            "/home/someone/.zfunc/_minato",
+            "/home/someone/.oh-my-zsh/custom/completions/_minato",
+            "/home/someone/.config/fish/completions/minato.fish",
+            "/home/someone/.config/elvish/lib/minato.elv",
+        ] {
+            assert!(
+                locations
+                    .iter()
+                    .any(|(_, path)| path == Path::new(expected)),
+                "nothing searches {expected}: {locations:?}"
+            );
+        }
+    }
+
+    /// oh-my-zsh lets its custom directory be moved with `$ZSH_CUSTOM`, and a
+    /// search fixed on the default would miss a script that is correctly
+    /// installed.
+    #[test]
+    fn a_relocated_oh_my_zsh_is_searched_where_it_actually_is() {
+        let home = Path::new("/home/someone");
+        let locations = completion_locations(home, Some(Path::new("/elsewhere/custom")));
+
+        assert!(
+            locations
+                .iter()
+                .any(|(_, path)| path == Path::new("/elsewhere/custom/completions/_minato")),
+            "the relocated directory is not searched: {locations:?}"
+        );
+        assert!(
+            !locations
+                .iter()
+                .any(|(_, path)| path.starts_with("/home/someone/.oh-my-zsh")),
+            "the default is searched as well as the relocated one: {locations:?}"
+        );
+    }
+
+    /// Someone who has never set completion up is not doing anything wrong, so
+    /// the check has to stay quiet rather than nag.
+    #[test]
+    fn no_script_anywhere_is_not_a_complaint() {
+        let home = tempfile::tempdir().expect("a temporary directory");
+        let (ok, detail) = completion_check(&completion_locations(home.path(), None));
+
+        assert!(ok, "an absent script was reported as a problem: {detail}");
+        assert!(detail.contains("none found"), "{detail}");
+    }
+
+    #[test]
+    fn a_script_matching_what_the_binary_generates_is_current() {
+        let home = tempfile::tempdir().expect("a temporary directory");
+        let script = home.path().join(".zfunc/_minato");
+        std::fs::create_dir_all(script.parent().expect("a parent")).expect("the directory");
+        std::fs::write(&script, completions(clap_complete::Shell::Zsh)).expect("the script");
+
+        let (ok, detail) = completion_check(&completion_locations(home.path(), None));
+
+        assert!(ok, "a current script was reported as stale: {detail}");
+        assert!(detail.contains("current"), "{detail}");
+        assert!(detail.contains(".zfunc/_minato"), "{detail}");
+    }
+
+    /// The point of the check: a script generated before a release that added
+    /// a command still works and silently offers the old surface.
+    #[test]
+    fn a_script_the_binary_would_now_generate_differently_is_reported_stale() {
+        let home = tempfile::tempdir().expect("a temporary directory");
+        let script = home.path().join(".config/fish/completions/minato.fish");
+        std::fs::create_dir_all(script.parent().expect("a parent")).expect("the directory");
+
+        let outdated = completions(clap_complete::Shell::Fish).replace("sync-fork", "sync-forks");
+        std::fs::write(&script, outdated).expect("the script");
+
+        let (ok, detail) = completion_check(&completion_locations(home.path(), None));
+
+        assert!(!ok, "a stale script was reported as current: {detail}");
+        // Naming the file is not enough: the answer to "what do I do about it"
+        // is the command, and it differs per shell and per path.
+        assert!(
+            detail.contains("minato completions fish >"),
+            "the report never says how to refresh it: {detail}"
+        );
+        assert!(detail.contains("minato.fish"), "{detail}");
     }
 
     /// The destination is the whole point of the hint, so each shell has to

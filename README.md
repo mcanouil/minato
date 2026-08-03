@@ -72,7 +72,7 @@ A command asked to narrow by a condition it cannot act on says so and stops, rat
 | `minato move <repo> --to-group <group>` | Moves one repository into another group, which means moving its directory.                                                                                                     |
 | `minato refresh`                        | Discards cached data so the next run asks the provider again.                                                                                                                  |
 | `minato auth status`                    | Whether a token was found and where it came from, never the token itself.                                                                                                      |
-| `minato doctor`                         | Checks git, the token, configuration, roots, and the cache, reporting all of them rather than stopping at the first problem.                                                   |
+| `minato doctor`                         | Checks git, the token, configuration, roots, the cache, and whether an installed completion script has fallen behind, reporting all of them rather than stopping at the first problem. |
 | `minato tui`                            | Browses the same comparison interactively.                                                                                                                                     |
 
 ### Interactive browser

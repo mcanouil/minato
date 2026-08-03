@@ -200,7 +200,23 @@ ok  token          found in the gh CLI
 ok  configuration  /Users/you/.config/minato/minato.toml
 ok  roots          /Users/you/Projects
 ok  cache          /Users/you/.cache/minato
+ok  completions    current: /Users/you/.zfunc/_minato
 ```
+
+A completion script is a copy of the command surface taken when it was generated, so an upgrade that adds a command leaves it offering the old one.
+`doctor` compares each script it finds against what the binary would generate now, and prints the command to rewrite any that has fallen behind.
+
+```{.default filename="Output"}
+!!  completions    1 of 2 found out of date
+
+completions:
+1 of 2 found out of date
+Regenerate:
+  minato completions fish > /Users/you/.config/fish/completions/minato.fish
+```
+
+The places searched are the ones named under [Enable completion](#enable-completion), with `$ZSH_CUSTOM` honoured when oh-my-zsh has been moved.
+A shell you have not set up is never mentioned, and PowerShell is not searched at all, since its script is evaluated from `$PROFILE` rather than saved to a file.
 
 ## See what has drifted
 
