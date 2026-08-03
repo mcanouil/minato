@@ -359,6 +359,11 @@ try {
         Write-Plain
     }
 
+    # No completion reminder here, unlike install.sh. The documented PowerShell
+    # setup pipes `minato completions powershell` into Invoke-Expression from
+    # $PROFILE, so the script is regenerated from the installed binary at every
+    # session and cannot fall behind the command surface the way a saved file
+    # can. There is nothing for an upgrade to invalidate.
     Write-Plain 'Next steps:'
     Write-Plain "  $BinaryName doctor   # Check configuration and tooling are usable"
     Write-Plain "  $BinaryName --help   # List the commands"

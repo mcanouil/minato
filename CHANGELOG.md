@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - feat: report a stale shell completion script in `minato doctor`, comparing each one it finds against what the binary would generate now and printing the command that rewrites it, so a script left offering the commands of an older release is noticed rather than quietly wrong (#89).
+- feat: name any completion script the shell installer has just made stale, with the command that rewrites it, since an install is the moment the command surface changes; a script still matching the installed binary is passed over in silence (#90).
 
 ### Bug Fixes
 
