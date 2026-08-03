@@ -5,8 +5,6 @@
 //! binary: a command or flag that changes without the file being regenerated
 //! breaks the build.
 
-use minato::cli::Cli;
-
 fn main() {
     let front_matter = r#"---
 title: "Command reference"
@@ -24,7 +22,7 @@ subtitle: "Generated from the command-line definitions, so it never drifts from 
     // what the page's table of contents already is, so that one is switched off
     // at the source and the rest cut here.
     let options = clap_markdown::MarkdownOptions::new().show_table_of_contents(false);
-    let markdown = clap_markdown::help_markdown_custom::<Cli>(&options);
+    let markdown = clap_markdown::help_markdown_command_custom(&minato::cli::command(), &options);
     let body = markdown
         .find("\n## ")
         .map(|start| &markdown[start + 1..])

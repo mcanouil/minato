@@ -1,11 +1,10 @@
 use std::process::ExitCode;
 
-use clap::Parser;
-use minato::cli::{self, Cli};
+use minato::cli;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let cli = cli::parse();
 
     match cli::run(&cli).await {
         Ok(output) => {

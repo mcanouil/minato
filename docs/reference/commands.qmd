@@ -13,23 +13,226 @@ Overview and sync of Git repositories across hosting providers
 
 ###### **Subcommands:**
 
-* `list` — List every repository, with what the provider reports about it
 * `status` — Show how local clones stand against what the provider reports
 * `clone` — Clone repositories that have no local copy
 * `fetch` — Fetch every local clone. This never touches a working tree
 * `update` — Fast-forward clones that are strictly behind and clean
+* `tui` — Browse repositories interactively
+* `list` — List every repository, with what the provider reports about it
 * `sync-fork` — Sync forks with their upstream, fast-forward only
 * `move` — Move one repository into a group, which moves it on disk
 * `refresh` — Discard cached data so the next run asks the provider again
 * `auth` — Inspect authentication
 * `doctor` — Check that configuration and tooling are usable
 * `completions` — Print a shell completion script
-* `tui` — Browse repositories interactively
 
 ###### **Options:**
 
-* `--json` — Emit JSON instead of a table
+* `--json` — Emit JSON instead of a table.
+
+   Global because every command answers something, so every command has an answer to serialise.
 * `--refresh` — Ignore cached data and ask the provider again
+
+
+
+## `minato status`
+
+Show how local clones stand against what the provider reports
+
+**Usage:** `minato status [OPTIONS]`
+
+###### **Options:**
+
+* `--owner <OWNER>` — Keep only repositories owned by these accounts.
+
+   Every command that works on a selection takes this. One that names its subject outright, or touches no repository at all, refuses it rather than ignoring it.
+* `--group <GROUP>` — Keep only repositories in these groups, and in the groups beneath them.
+
+   A group is a directory path beneath a root, written with `/`, so `--group perso` keeps `perso` and everything filed under it, including `perso/apps`, while `--group perso/apps` keeps only that bucket.
+
+   A group is where a clone sits, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+* `--state <STATE>` — Keep only repositories in these states.
+
+   A state is how a clone stands against the remote, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+
+  Possible values:
+  - `not-cloned`:
+    Reported by the provider, with no local clone
+  - `in-sync`:
+    Matching the remote exactly
+  - `ahead`:
+    Holding commits the remote does not
+  - `behind`:
+    Missing commits the remote has
+  - `diverged`:
+    Both sides hold commits the other lacks
+  - `local-only`:
+    A clone no reported repository corresponds to
+  - `incomparable`:
+    A clone that cannot be compared
+  - `drifted`:
+    Anything that is not in sync, which is what usually wants attention
+
+* `--include-forks` — Include forks, which are hidden by default
+* `--include-external` — Include clones of repositories owned by nobody you track, which are hidden by default.
+
+   This describes a clone, so only the commands that scan take it: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+
+
+
+## `minato clone`
+
+Clone repositories that have no local copy
+
+**Usage:** `minato clone [OPTIONS]`
+
+###### **Options:**
+
+* `--owner <OWNER>` — Keep only repositories owned by these accounts.
+
+   Every command that works on a selection takes this. One that names its subject outright, or touches no repository at all, refuses it rather than ignoring it.
+* `--group <GROUP>` — Keep only repositories in these groups, and in the groups beneath them.
+
+   A group is a directory path beneath a root, written with `/`, so `--group perso` keeps `perso` and everything filed under it, including `perso/apps`, while `--group perso/apps` keeps only that bucket.
+
+   A group is where a clone sits, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+* `--state <STATE>` — Keep only repositories in these states.
+
+   A state is how a clone stands against the remote, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+
+  Possible values:
+  - `not-cloned`:
+    Reported by the provider, with no local clone
+  - `in-sync`:
+    Matching the remote exactly
+  - `ahead`:
+    Holding commits the remote does not
+  - `behind`:
+    Missing commits the remote has
+  - `diverged`:
+    Both sides hold commits the other lacks
+  - `local-only`:
+    A clone no reported repository corresponds to
+  - `incomparable`:
+    A clone that cannot be compared
+  - `drifted`:
+    Anything that is not in sync, which is what usually wants attention
+
+* `--include-forks` — Include forks, which are hidden by default
+* `--include-external` — Include clones of repositories owned by nobody you track, which are hidden by default.
+
+   This describes a clone, so only the commands that scan take it: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+* `--into <DIRECTORY>` — Where to put them. Defaults to the first configured root.
+
+   Where a repository belongs is a judgement its identity does not carry, so it is chosen here rather than derived.
+* `--into-group <GROUP>` — Put them in this group, which is the directory path that group already occupies beneath a root, such as `perso/apps`.
+
+   This is not the same as the `--group` filter, which selects by where a clone already sits. A repository that has not been cloned is in no group, so filtering by one would match nothing.
+* `--dry-run` — Report what would be cloned, and change nothing
+* `--shallow` — Clone with a truncated history
+
+
+
+## `minato fetch`
+
+Fetch every local clone. This never touches a working tree
+
+**Usage:** `minato fetch [OPTIONS]`
+
+###### **Options:**
+
+* `--owner <OWNER>` — Keep only repositories owned by these accounts.
+
+   Every command that works on a selection takes this. One that names its subject outright, or touches no repository at all, refuses it rather than ignoring it.
+* `--group <GROUP>` — Keep only repositories in these groups, and in the groups beneath them.
+
+   A group is a directory path beneath a root, written with `/`, so `--group perso` keeps `perso` and everything filed under it, including `perso/apps`, while `--group perso/apps` keeps only that bucket.
+
+   A group is where a clone sits, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+* `--state <STATE>` — Keep only repositories in these states.
+
+   A state is how a clone stands against the remote, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+
+  Possible values:
+  - `not-cloned`:
+    Reported by the provider, with no local clone
+  - `in-sync`:
+    Matching the remote exactly
+  - `ahead`:
+    Holding commits the remote does not
+  - `behind`:
+    Missing commits the remote has
+  - `diverged`:
+    Both sides hold commits the other lacks
+  - `local-only`:
+    A clone no reported repository corresponds to
+  - `incomparable`:
+    A clone that cannot be compared
+  - `drifted`:
+    Anything that is not in sync, which is what usually wants attention
+
+* `--include-forks` — Include forks, which are hidden by default
+* `--include-external` — Include clones of repositories owned by nobody you track, which are hidden by default.
+
+   This describes a clone, so only the commands that scan take it: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+* `--dry-run` — Report what would be fetched, and change nothing
+
+
+
+## `minato update`
+
+Fast-forward clones that are strictly behind and clean
+
+**Usage:** `minato update [OPTIONS]`
+
+###### **Options:**
+
+* `--owner <OWNER>` — Keep only repositories owned by these accounts.
+
+   Every command that works on a selection takes this. One that names its subject outright, or touches no repository at all, refuses it rather than ignoring it.
+* `--group <GROUP>` — Keep only repositories in these groups, and in the groups beneath them.
+
+   A group is a directory path beneath a root, written with `/`, so `--group perso` keeps `perso` and everything filed under it, including `perso/apps`, while `--group perso/apps` keeps only that bucket.
+
+   A group is where a clone sits, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+* `--state <STATE>` — Keep only repositories in these states.
+
+   A state is how a clone stands against the remote, so only the commands that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+
+  Possible values:
+  - `not-cloned`:
+    Reported by the provider, with no local clone
+  - `in-sync`:
+    Matching the remote exactly
+  - `ahead`:
+    Holding commits the remote does not
+  - `behind`:
+    Missing commits the remote has
+  - `diverged`:
+    Both sides hold commits the other lacks
+  - `local-only`:
+    A clone no reported repository corresponds to
+  - `incomparable`:
+    A clone that cannot be compared
+  - `drifted`:
+    Anything that is not in sync, which is what usually wants attention
+
+* `--include-forks` — Include forks, which are hidden by default
+* `--include-external` — Include clones of repositories owned by nobody you track, which are hidden by default.
+
+   This describes a clone, so only the commands that scan take it: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
+* `--dry-run` — Report what would be updated, and change nothing
+
+
+
+## `minato tui`
+
+Browse repositories interactively
+
+**Usage:** `minato tui [OPTIONS]`
+
+###### **Options:**
+
 * `--owner <OWNER>` — Keep only repositories owned by these accounts.
 
    Every command that works on a selection takes this. One that names its subject outright, or touches no repository at all, refuses it rather than ignoring it.
@@ -71,58 +274,14 @@ Overview and sync of Git repositories across hosting providers
 
 List every repository, with what the provider reports about it
 
-**Usage:** `minato list`
-
-
-
-## `minato status`
-
-Show how local clones stand against what the provider reports
-
-**Usage:** `minato status`
-
-
-
-## `minato clone`
-
-Clone repositories that have no local copy
-
-**Usage:** `minato clone [OPTIONS]`
+**Usage:** `minato list [OPTIONS]`
 
 ###### **Options:**
 
-* `--into <DIRECTORY>` — Where to put them. Defaults to the first configured root.
+* `--owner <OWNER>` — Keep only repositories owned by these accounts.
 
-   Where a repository belongs is a judgement its identity does not carry, so it is chosen here rather than derived.
-* `--into-group <GROUP>` — Put them in this group, which is the directory path that group already occupies beneath a root, such as `perso/apps`.
-
-   This is not the same as the `--group` filter, which selects by where a clone already sits. A repository that has not been cloned is in no group, so filtering by one would match nothing.
-* `--dry-run` — Report what would be cloned, and change nothing
-* `--shallow` — Clone with a truncated history
-
-
-
-## `minato fetch`
-
-Fetch every local clone. This never touches a working tree
-
-**Usage:** `minato fetch [OPTIONS]`
-
-###### **Options:**
-
-* `--dry-run` — Report what would be fetched, and change nothing
-
-
-
-## `minato update`
-
-Fast-forward clones that are strictly behind and clean
-
-**Usage:** `minato update [OPTIONS]`
-
-###### **Options:**
-
-* `--dry-run` — Report what would be updated, and change nothing
+   Every command that works on a selection takes this. One that names its subject outright, or touches no repository at all, refuses it rather than ignoring it.
+* `--include-forks` — Include forks, which are hidden by default
 
 
 
@@ -136,6 +295,10 @@ Only a fork strictly behind its upstream is synced, through GitHub's merge-upstr
 
 ###### **Options:**
 
+* `--owner <OWNER>` — Keep only repositories owned by these accounts.
+
+   Every command that works on a selection takes this. One that names its subject outright, or touches no repository at all, refuses it rather than ignoring it.
+* `--include-forks` — Include forks, which are hidden by default
 * `--dry-run` — Report what would be synced, and change nothing
 
 
@@ -154,6 +317,7 @@ Deliberately one repository at a time: this changes the filesystem, so it is nev
 
 ###### **Options:**
 
+* `--include-forks` — Include forks, which are hidden by default
 * `--to-group <GROUP>` — The group to move it into, which is a directory path beneath its root, such as `perso/apps`
 * `--dry-run` — Report what would move, and change nothing
 
@@ -163,7 +327,11 @@ Deliberately one repository at a time: this changes the filesystem, so it is nev
 
 Discard cached data so the next run asks the provider again
 
-**Usage:** `minato refresh`
+**Usage:** `minato refresh [OPTIONS]`
+
+###### **Options:**
+
+* `--include-forks` — Include forks, which are hidden by default
 
 
 
@@ -181,9 +349,15 @@ Inspect authentication
 
 ## `minato auth status`
 
-Report whether a token was found, and where it came from
+Report whether a token was found, and where it came from.
 
-**Usage:** `minato auth status`
+The selection sits here rather than on `auth`, so `minato auth status --owner ...` is read and then explained rather than rejected as an unknown argument.
+
+**Usage:** `minato auth status [OPTIONS]`
+
+###### **Options:**
+
+* `--include-forks` — Include forks, which are hidden by default
 
 
 
@@ -191,7 +365,11 @@ Report whether a token was found, and where it came from
 
 Check that configuration and tooling are usable
 
-**Usage:** `minato doctor`
+**Usage:** `minato doctor [OPTIONS]`
+
+###### **Options:**
+
+* `--include-forks` — Include forks, which are hidden by default
 
 
 
@@ -203,7 +381,7 @@ The script goes to standard output and where to put it goes to standard error, s
 
 It is generated from the command definitions, so it cannot describe a command the binary does not have, and it needs regenerating after an upgrade that adds one.
 
-**Usage:** `minato completions <SHELL>`
+**Usage:** `minato completions [OPTIONS] <SHELL>`
 
 ###### **Arguments:**
 
@@ -212,13 +390,9 @@ It is generated from the command definitions, so it cannot describe a command th
   Possible values: `bash`, `elvish`, `fish`, `powershell`, `zsh`
 
 
+###### **Options:**
 
-
-## `minato tui`
-
-Browse repositories interactively
-
-**Usage:** `minato tui`
+* `--include-forks` — Include forks, which are hidden by default
 
 
 

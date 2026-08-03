@@ -9,7 +9,7 @@ mod render;
 
 use std::path::{Path, PathBuf};
 
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use jiff::{SignedDuration, Timestamp};
 use serde::Serialize;
 use std::fmt::Write as _;
@@ -29,11 +29,11 @@ use render::{Table, describe_age};
 /// Overview and sync of Git repositories across hosting providers.
 #[derive(Debug, Parser)]
 #[command(name = "minato", version, about)]
-// Each bool is an independent, order-free command-line flag, which is the
-// natural shape for a CLI rather than a state machine to be split up.
-#[allow(clippy::struct_excessive_bools)]
 pub struct Cli {
     /// Emit JSON instead of a table.
+    ///
+    /// Global because every command answers something, so every command has an
+    /// answer to serialise.
     #[arg(long, global = true)]
     pub json: bool,
 
@@ -41,12 +41,28 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub refresh: bool,
 
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+/// What a command has been narrowed to work on.
+///
+/// Carried by every command rather than by the root, so that a command's help
+/// lists only the conditions it can act on: a global argument is propagated at
+/// parse time and cannot be hidden on one subcommand. `narrowing` hides the
+/// inapplicable ones and refuses them when they are named anyway, which keeps
+/// the refusal an explanation rather than clap's "unexpected argument".
+#[derive(Debug, Clone, Default, Args)]
+// Each bool is an independent, order-free command-line flag, which is the
+// natural shape for a CLI rather than a state machine to be split up.
+#[allow(clippy::struct_excessive_bools)]
+pub struct Selection {
     /// Keep only repositories owned by these accounts.
     ///
     /// Every command that works on a selection takes this. One that names its
     /// subject outright, or touches no repository at all, refuses it rather
     /// than ignoring it.
-    #[arg(long = "owner", global = true, value_name = "OWNER")]
+    #[arg(long = "owner", value_name = "OWNER")]
     pub owners: Vec<String>,
 
     /// Keep only repositories in these groups, and in the groups beneath them.
@@ -58,7 +74,7 @@ pub struct Cli {
     /// A group is where a clone sits, so only the commands that scan take
     /// this: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it
     /// is refused rather than ignored.
-    #[arg(long = "group", global = true, value_name = "GROUP")]
+    #[arg(long = "group", value_name = "GROUP")]
     pub groups: Vec<String>,
 
     /// Keep only repositories in these states.
@@ -66,11 +82,11 @@ pub struct Cli {
     /// A state is how a clone stands against the remote, so only the commands
     /// that scan take this: `status`, `clone`, `fetch`, `update`, and `tui`.
     /// Anywhere else it is refused rather than ignored.
-    #[arg(long = "state", global = true, value_name = "STATE")]
+    #[arg(long = "state", value_name = "STATE")]
     pub states: Vec<filter::StateFilter>,
 
     /// Include forks, which are hidden by default.
-    #[arg(long, global = true)]
+    #[arg(long)]
     pub include_forks: bool,
 
     /// Include clones of repositories owned by nobody you track, which are
@@ -79,24 +95,30 @@ pub struct Cli {
     /// This describes a clone, so only the commands that scan take it:
     /// `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is
     /// refused rather than ignored.
-    #[arg(long, global = true)]
+    #[arg(long)]
     pub include_external: bool,
-
-    #[command(subcommand)]
-    pub command: Command,
 }
 
 /// What to do.
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// List every repository, with what the provider reports about it.
-    List,
+    List {
+        #[command(flatten)]
+        selection: Selection,
+    },
 
     /// Show how local clones stand against what the provider reports.
-    Status,
+    Status {
+        #[command(flatten)]
+        selection: Selection,
+    },
 
     /// Clone repositories that have no local copy.
     Clone {
+        #[command(flatten)]
+        selection: Selection,
+
         /// Where to put them. Defaults to the first configured root.
         ///
         /// Where a repository belongs is a judgement its identity does not
@@ -124,6 +146,9 @@ pub enum Command {
 
     /// Fetch every local clone. This never touches a working tree.
     Fetch {
+        #[command(flatten)]
+        selection: Selection,
+
         /// Report what would be fetched, and change nothing.
         #[arg(long)]
         dry_run: bool,
@@ -131,6 +156,9 @@ pub enum Command {
 
     /// Fast-forward clones that are strictly behind and clean.
     Update {
+        #[command(flatten)]
+        selection: Selection,
+
         /// Report what would be updated, and change nothing.
         #[arg(long)]
         dry_run: bool,
@@ -142,6 +170,9 @@ pub enum Command {
     /// merge-upstream. A fork holding its own commits is reported and left
     /// alone rather than merged, so history is never rewritten.
     SyncFork {
+        #[command(flatten)]
+        selection: Selection,
+
         /// Report what would be synced, and change nothing.
         #[arg(long)]
         dry_run: bool,
@@ -152,6 +183,9 @@ pub enum Command {
     /// Deliberately one repository at a time: this changes the filesystem, so
     /// it is never a side effect of anything else.
     Move {
+        #[command(flatten)]
+        selection: Selection,
+
         /// Which repository, named by identity, owner/name, or bare name.
         #[arg(value_name = "REPOSITORY")]
         repository: String,
@@ -167,7 +201,10 @@ pub enum Command {
     },
 
     /// Discard cached data so the next run asks the provider again.
-    Refresh,
+    Refresh {
+        #[command(flatten)]
+        selection: Selection,
+    },
 
     /// Inspect authentication.
     Auth {
@@ -176,7 +213,10 @@ pub enum Command {
     },
 
     /// Check that configuration and tooling are usable.
-    Doctor,
+    Doctor {
+        #[command(flatten)]
+        selection: Selection,
+    },
 
     /// Print a shell completion script.
     ///
@@ -190,19 +230,32 @@ pub enum Command {
     /// command the binary does not have, and it needs regenerating after an
     /// upgrade that adds one.
     Completions {
+        #[command(flatten)]
+        selection: Selection,
+
         /// Which shell to generate for.
         shell: clap_complete::Shell,
     },
 
     /// Browse repositories interactively.
-    Tui,
+    Tui {
+        #[command(flatten)]
+        selection: Selection,
+    },
 }
 
 /// Authentication subcommands.
 #[derive(Debug, Subcommand)]
 pub enum AuthCommand {
     /// Report whether a token was found, and where it came from.
-    Status,
+    ///
+    /// The selection sits here rather than on `auth`, so `minato auth status
+    /// --owner ...` is read and then explained rather than rejected as an
+    /// unknown argument.
+    Status {
+        #[command(flatten)]
+        selection: Selection,
+    },
 }
 
 /// Anything that stops a command from producing an answer.
@@ -275,15 +328,65 @@ pub struct Output {
     pub failed: bool,
 }
 
+/// The command surface, with each command's inapplicable narrowing hidden.
+///
+/// Everything that renders or parses the surface goes through this rather than
+/// `Cli::command()`, so help, the generated reference, and the completion
+/// scripts all show the same thing the binary will accept.
+#[must_use]
+pub fn command() -> clap::Command {
+    narrowing::hide_inapplicable(Cli::command())
+}
+
+/// Parses the command line, exiting with clap's own message when it cannot.
+#[must_use]
+pub fn parse() -> Cli {
+    let matches = command().get_matches();
+
+    match Cli::from_arg_matches(&matches) {
+        Ok(cli) => cli,
+        // Only reachable if the derived reader and the command tree disagree,
+        // which would be a bug here rather than a mistake by the user, so let
+        // clap report it as it reports its own errors.
+        Err(error) => error.exit(),
+    }
+}
+
 impl Cli {
+    /// What the command was narrowed to work on.
+    ///
+    /// Exhaustive on purpose, with no wildcard arm: every command carries a
+    /// selection, so a new one will not compile until it says so too.
+    #[must_use]
+    pub fn selection(&self) -> &Selection {
+        match &self.command {
+            Command::List { selection }
+            | Command::Status { selection }
+            | Command::Clone { selection, .. }
+            | Command::Fetch { selection, .. }
+            | Command::Update { selection, .. }
+            | Command::SyncFork { selection, .. }
+            | Command::Move { selection, .. }
+            | Command::Refresh { selection }
+            | Command::Auth {
+                command: AuthCommand::Status { selection },
+            }
+            | Command::Doctor { selection }
+            | Command::Completions { selection, .. }
+            | Command::Tui { selection } => selection,
+        }
+    }
+
     /// The filter the user asked for.
     fn filter(&self) -> Filter {
+        let selection = self.selection();
+
         Filter {
-            owners: self.owners.clone(),
-            groups: self.groups.clone(),
-            states: self.states.clone(),
-            include_forks: self.include_forks,
-            include_external: self.include_external,
+            owners: selection.owners.clone(),
+            groups: selection.groups.clone(),
+            states: selection.states.clone(),
+            include_forks: selection.include_forks,
+            include_external: selection.include_external,
         }
     }
 }
@@ -310,21 +413,22 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
 
     match &cli.command {
         Command::Auth {
-            command: AuthCommand::Status,
+            command: AuthCommand::Status { .. },
         } => Ok(auth_status(cli.json).into()),
-        Command::Doctor => doctor(cli.json).map(Into::into),
-        Command::Completions { shell } => {
+        Command::Doctor { .. } => doctor(cli.json).map(Into::into),
+        Command::Completions { shell, .. } => {
             // On standard error, so a redirect into the shell's completion
             // directory captures the script and leaves the instructions on
             // the terminal, where they are of use.
             eprintln!("{}", completion_hint(*shell));
             Ok(completions(*shell).into())
         }
-        Command::Tui => tui(cli).await,
-        Command::Refresh => refresh(cli.json).map(Into::into),
-        Command::List => list(cli).await.map(Into::into),
-        Command::Status => status(cli).await.map(Into::into),
+        Command::Tui { .. } => tui(cli).await,
+        Command::Refresh { .. } => refresh(cli.json).map(Into::into),
+        Command::List { .. } => list(cli).await.map(Into::into),
+        Command::Status { .. } => status(cli).await.map(Into::into),
         Command::Clone {
+            selection: _,
             into,
             group,
             dry_run,
@@ -341,10 +445,11 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
             )
             .await
         }
-        Command::Fetch { dry_run } => act(cli, Act::Fetch, mode(*dry_run)).await,
-        Command::Update { dry_run } => act(cli, Act::Update, mode(*dry_run)).await,
-        Command::SyncFork { dry_run } => sync_fork(cli, mode(*dry_run)).await,
+        Command::Fetch { dry_run, .. } => act(cli, Act::Fetch, mode(*dry_run)).await,
+        Command::Update { dry_run, .. } => act(cli, Act::Update, mode(*dry_run)).await,
+        Command::SyncFork { dry_run, .. } => sync_fork(cli, mode(*dry_run)).await,
         Command::Move {
+            selection: _,
             repository,
             group,
             dry_run,
@@ -858,7 +963,8 @@ fn refresh(as_json: bool) -> Result<String, CliError> {
 /// was invoked by, so a script written from a build directory, or from a copy
 /// under another name, still completes the command as it is installed.
 fn completions(shell: clap_complete::Shell) -> String {
-    let mut command = Cli::command();
+    // The hidden surface, so a script never offers a flag its command refuses.
+    let mut command = command();
     let name = command.get_name().to_owned();
     let mut script = Vec::new();
     clap_complete::generate(shell, &mut command, name, &mut script);
@@ -1139,7 +1245,9 @@ async fn list(cli: &Cli) -> Result<String, CliError> {
     let remotes: Vec<_> = gathered
         .remotes
         .iter()
-        .filter(|repo| filter.owner_matches(&repo.id.owner) && (cli.include_forks || !repo.is_fork))
+        .filter(|repo| {
+            filter.owner_matches(&repo.id.owner) && (cli.selection().include_forks || !repo.is_fork)
+        })
         .collect();
 
     if cli.json {
@@ -1644,8 +1752,8 @@ mod tests {
                 Cli::try_parse_from(["minato", command, "--include-forks", "--include-external"])
                     .unwrap_or_else(|error| panic!("{command} should parse: {error}"));
 
-            assert!(parsed.include_forks);
-            assert!(parsed.include_external);
+            assert!(parsed.selection().include_forks);
+            assert!(parsed.selection().include_external);
         }
     }
 
@@ -1826,14 +1934,14 @@ mod tests {
 
         assert_eq!(group.as_deref(), Some("demo"));
         assert!(
-            by_group.groups.is_empty(),
+            by_group.selection().groups.is_empty(),
             "choosing a destination must not also filter by group"
         );
 
         let filtered =
             Cli::try_parse_from(["minato", "status", "--group", "demo"]).expect("a filter");
 
-        assert_eq!(filtered.groups, ["demo"]);
+        assert_eq!(filtered.selection().groups, ["demo"]);
     }
 
     #[test]

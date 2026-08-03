@@ -1,11 +1,17 @@
 //! Which narrowing conditions each command can actually act on.
 //!
-//! `--owner`, `--group`, `--state`, and `--include-external` are global, so clap
-//! accepts them everywhere. Not every command can honour them: a group and a
-//! state are facts about a local clone, and a command that never scans has
-//! nothing for them to match. Naming one there is refused rather than dropped,
-//! because an unnarrowed answer looks like a valid answer to a question that
-//! was never asked.
+//! `--owner`, `--group`, `--state`, and `--include-external` are carried by
+//! every command. Not every command can honour them: a group and a state are
+//! facts about a local clone, and a command that never scans has nothing for
+//! them to match. Naming one there is refused rather than dropped, because an
+//! unnarrowed answer looks like a valid answer to a question that was never
+//! asked.
+//!
+//! This module holds both halves of that: the conditions each command acts on,
+//! which decides what its help offers, and the refusal shown when one it
+//! cannot act on is named anyway. Hiding a flag does not remove it, so the
+//! refusal is still an explanation naming the command that does take it,
+//! rather than clap's "unexpected argument".
 
 use super::{Cli, Command};
 
@@ -30,6 +36,16 @@ impl Narrowing {
             Self::Group => "--group",
             Self::State => "--state",
             Self::External => "--include-external",
+        }
+    }
+
+    /// The argument's id, which is what clap is asked about.
+    const fn id(self) -> &'static str {
+        match self {
+            Self::Owner => "owners",
+            Self::Group => "groups",
+            Self::State => "states",
+            Self::External => "include_external",
         }
     }
 }
@@ -75,22 +91,22 @@ struct Narrowable {
 
 /// What each command narrows by.
 ///
-/// Exhaustive on purpose, with no wildcard arm: the flags are global, so clap
-/// accepts them everywhere and each command has to say for itself which ones it
-/// acts on. A new command will not compile until it does.
+/// Exhaustive on purpose, with no wildcard arm: every command declares all the
+/// conditions, so each has to say for itself which ones it acts on. A new
+/// command will not compile until it does.
 const fn narrowable(command: &Command) -> Narrowable {
     let (command, honoured, note) = match command {
-        Command::Status => ("status", EVERY, ACTS_ON_EVERY),
+        Command::Status { .. } => ("status", EVERY, ACTS_ON_EVERY),
         Command::Clone { .. } => ("clone", EVERY, ACTS_ON_EVERY),
         Command::Fetch { .. } => ("fetch", EVERY, ACTS_ON_EVERY),
         Command::Update { .. } => ("update", EVERY, ACTS_ON_EVERY),
-        Command::Tui => ("tui", EVERY, ACTS_ON_EVERY),
-        Command::List => ("list", REMOTE, WORKS_REMOTELY),
+        Command::Tui { .. } => ("tui", EVERY, ACTS_ON_EVERY),
+        Command::List { .. } => ("list", REMOTE, WORKS_REMOTELY),
         Command::SyncFork { .. } => ("sync-fork", REMOTE, WORKS_REMOTELY),
         Command::Move { .. } => ("move", NONE, NAMES_ITS_SUBJECT),
-        Command::Refresh => ("refresh", NONE, TOUCHES_NOTHING),
+        Command::Refresh { .. } => ("refresh", NONE, TOUCHES_NOTHING),
         Command::Auth { .. } => ("auth status", NONE, TOUCHES_NOTHING),
-        Command::Doctor => ("doctor", NONE, TOUCHES_NOTHING),
+        Command::Doctor { .. } => ("doctor", NONE, TOUCHES_NOTHING),
         Command::Completions { .. } => ("completions", NONE, TOUCHES_NOTHING),
     };
 
@@ -101,23 +117,79 @@ const fn narrowable(command: &Command) -> Narrowable {
     }
 }
 
+/// What each command narrows by, keyed by the path clap knows it as.
+///
+/// A second view of what `narrowable` returns, needed because hiding an
+/// argument happens on the command tree, before anything has been parsed and
+/// so before there is a `Command` to match on.
+/// `every_command_hides_exactly_what_it_refuses` drives both from the same
+/// list and asserts they agree, so the two cannot drift apart unnoticed.
+///
+/// A path rather than a name because `auth status` carries its selection on
+/// the leaf, so that typing it there is explained rather than rejected.
+const BY_PATH: &[(&[&str], &[Narrowing])] = &[
+    (&["status"], EVERY),
+    (&["clone"], EVERY),
+    (&["fetch"], EVERY),
+    (&["update"], EVERY),
+    (&["tui"], EVERY),
+    (&["list"], REMOTE),
+    (&["sync-fork"], REMOTE),
+    (&["move"], NONE),
+    (&["refresh"], NONE),
+    (&["auth", "status"], NONE),
+    (&["doctor"], NONE),
+    (&["completions"], NONE),
+];
+
+/// Hides the named conditions on the command at the end of the path.
+fn hide_at(command: clap::Command, path: &[&str], refused: &[Narrowing]) -> clap::Command {
+    let Some((name, rest)) = path.split_first() else {
+        return refused.iter().fold(command, |command, condition| {
+            command.mut_arg(condition.id(), |arg| arg.hide(true))
+        });
+    };
+
+    command.mut_subcommand(name, |subcommand| hide_at(subcommand, rest, refused))
+}
+
+/// Hides, on each command, the narrowing arguments it cannot act on.
+///
+/// Help then lists only what a command will accept, and the generated
+/// completion scripts stop offering flags that would be refused. Naming one
+/// anyway still reaches `check`, so the refusal remains an explanation rather
+/// than clap's "unexpected argument": hidden is not the same as absent.
+pub fn hide_inapplicable(command: clap::Command) -> clap::Command {
+    BY_PATH.iter().fold(command, |command, (path, honoured)| {
+        let refused: Vec<Narrowing> = EVERY
+            .iter()
+            .copied()
+            .filter(|condition| !honoured.contains(condition))
+            .collect();
+
+        hide_at(command, path, &refused)
+    })
+}
+
 /// The conditions the run was narrowed by.
 fn named(cli: &Cli) -> Vec<Narrowing> {
     let mut named = Vec::new();
 
-    if !cli.owners.is_empty() {
+    let selection = cli.selection();
+
+    if !selection.owners.is_empty() {
         named.push(Narrowing::Owner);
     }
 
-    if !cli.groups.is_empty() {
+    if !selection.groups.is_empty() {
         named.push(Narrowing::Group);
     }
 
-    if !cli.states.is_empty() {
+    if !selection.states.is_empty() {
         named.push(Narrowing::State);
     }
 
-    if cli.include_external {
+    if selection.include_external {
         named.push(Narrowing::External);
     }
 
@@ -335,6 +407,76 @@ mod tests {
                 message.contains(flag),
                 "a run should be corrected once rather than a flag at a time: {message}"
             );
+        }
+    }
+
+    /// `BY_NAME` drives what is hidden and `narrowable` drives what is
+    /// refused, so the two saying different things would mean a flag shown in
+    /// help and then rejected, or hidden and then honoured.
+    #[test]
+    fn every_command_hides_exactly_what_it_refuses() {
+        for arguments in EVERY_COMMAND {
+            let cli = Cli::try_parse_from(*arguments).expect("the arguments should parse");
+            let refused = narrowable(&cli.command);
+
+            // `auth status` is two words in a refusal but one subcommand in
+            // the tree, which is where hiding happens.
+            let path: Vec<&str> = refused.command.split_whitespace().collect();
+            let (_, hidden) = BY_PATH
+                .iter()
+                .find(|(candidate, _)| *candidate == path.as_slice())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "`{}` is refused by a table that never hides it",
+                        refused.command
+                    )
+                });
+
+            assert_eq!(
+                refused.honoured, *hidden,
+                "`{}` hides a different set from the one it refuses",
+                refused.command
+            );
+        }
+    }
+
+    /// The point of the change: what a command's help offers is what it will
+    /// accept, so the surface cannot advertise a flag that is then rejected.
+    #[test]
+    fn help_offers_only_the_conditions_a_command_acts_on() {
+        for (path, honoured) in BY_PATH {
+            let name = path.join(" ");
+            let mut command = crate::cli::command();
+
+            for step in *path {
+                let next = command
+                    .get_subcommands()
+                    .find(|subcommand| subcommand.get_name() == *step)
+                    .unwrap_or_else(|| panic!("`{name}` is not a command"))
+                    .clone();
+
+                command = next;
+            }
+
+            for condition in EVERY {
+                // Asked of the arguments rather than of the rendered text: a
+                // doc comment that names a flag in prose is not the same as
+                // help offering it.
+                let long = condition.flag().trim_start_matches('-');
+                let shown = command
+                    .get_arguments()
+                    .any(|argument| argument.get_long() == Some(long) && !argument.is_hide_set());
+                let acts_on = honoured.contains(condition);
+
+                assert_eq!(
+                    shown,
+                    acts_on,
+                    "`{name}` {} {} in its help, but {} it",
+                    if shown { "offers" } else { "hides" },
+                    condition.flag(),
+                    if acts_on { "acts on" } else { "refuses" }
+                );
+            }
         }
     }
 
