@@ -12,10 +12,17 @@ All notable changes to this project will be documented in this file.
 
 - feat: report a stale shell completion script in `minato doctor`, comparing each one it finds against what the binary would generate now and printing the command that rewrites it, so a script left offering the commands of an older release is noticed rather than quietly wrong (#89).
 - feat: name any completion script the shell installer has just made stale, with the command that rewrites it, since an install is the moment the command surface changes; a script still matching the installed binary is passed over in silence (#90).
+- feat: install a completion script with `minato completions <shell> --install`, which writes it where the shell reads it and edits the shell's configuration only where the file alone is not enough, inside a managed block that re-running replaces and `--uninstall` removes. `--dry-run` reports every path either would touch. The shell is taken from `$SHELL` when it is left out, and printing the script to standard output is still what happens without a flag.
+- feat: install zsh completions to Oh My Zsh's custom directory, or to Homebrew's `share/zsh/site-functions` when the prefix has one and it is writable, before falling back to `~/.zfunc` with an `fpath` line. The first two are on `fpath` already, so nothing is added to `~/.zshrc` for them.
+- fix: report a stale copy that cannot be removed, rather than failing on it. One of the places swept is Homebrew's prefix, which is outside the home directory and may belong to another user, and a file there is not reason enough to fail an install that has otherwise worked. Nothing is ever removed with elevated rights.
+- feat: keep an install where it is. A script already on disk is the one that is updated, wherever it is, even once the machine has gained Oh My Zsh, Homebrew, or bash-completion and a first install would now choose elsewhere; copies in the other known places are swept so none is left to shadow it. Moving one is `--uninstall` followed by a fresh install.
+- feat: leave an unchanged script alone, reporting `Already current` rather than rewriting a file that already matches what this binary generates.
 
 ### Bug Fixes
 
 - fix: say where a completion script goes, printing the destination for the shell asked for on standard error alongside the script on standard output, so `minato completions zsh > _minato` writes the script alone and the instructions still reach the terminal; the help no longer declines to answer, and the zsh instructions name the oh-my-zsh directory that needs no further setup (#88).
+- fix: honour `$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` when working out where a completion script lives. Both were hardcoded to `~/.local/share` and `~/.config`, so on a machine that sets either, `minato doctor` reported on a file nobody had, and the installer's stale-script check looked in the wrong place.
+- fix: follow `$ZSH` and `$ZSH_CUSTOM` only when they point inside `$HOME`. Oh My Zsh exports both, so a run with a different `$HOME` would otherwise install into, and on uninstall delete from, a home nobody named.
 
 ## 0.3.0 (2026-08-03)
 

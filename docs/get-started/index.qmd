@@ -72,74 +72,26 @@ Doing so is deliberate: your SSH agent, credential helpers, and `git` configurat
 
 ## Enable completion
 
-`minato completions <shell>` prints a completion script to standard output, for `bash`, `zsh`, `fish`, `powershell`, and `elvish`.
-Where it goes is printed to standard error alongside it, so a redirect captures the script alone and the instructions still reach your terminal.
-The same destinations are set out below.
-
-::: {.panel-tabset}
-
-### bash
-
 ```{.bash filename="Terminal"}
-mkdir -p ~/.local/share/bash-completion/completions
-minato completions bash > ~/.local/share/bash-completion/completions/minato
+minato completions --install
 ```
 
-### zsh
+That writes the script where the shell reads it, taking the shell from `$SHELL` unless you name one, and edits your shell's configuration only where the file alone is not enough.
+`--dry-run` reports every path it would touch first, and `--uninstall` removes what it wrote.
 
-The destination has to be a directory on `$fpath`, named `_minato`, and `compinit` has to run after it is added.
+Open a new shell, then `minato <Tab>` lists the commands and `minato clone --<Tab>` lists that command's flags.
 
-With oh-my-zsh, its custom completions directory is already on `$fpath` and `compinit` already runs, so writing the file is the whole of it.
+Without `--install`, `minato completions <shell>` prints the script to standard output and where it belongs to standard error, so a redirect captures the script alone and the instructions still reach your terminal.
+[Shells](../shells.qmd) sets out every destination, the configuration each shell needs, and how to do it by hand.
 
-```{.bash filename="Terminal"}
-mkdir -p ~/.oh-my-zsh/custom/completions
-minato completions zsh > ~/.oh-my-zsh/custom/completions/_minato
-```
-
-Otherwise, pick a directory and add it yourself.
-
-```{.bash filename="Terminal"}
-mkdir -p ~/.zfunc
-minato completions zsh > ~/.zfunc/_minato
-```
-
-```{.bash filename="~/.zshrc"}
-fpath=(~/.zfunc $fpath)
-autoload -Uz compinit && compinit
-```
-
-### fish
-
-```{.bash filename="Terminal"}
-mkdir -p ~/.config/fish/completions
-minato completions fish > ~/.config/fish/completions/minato.fish
-```
-
-### PowerShell
+PowerShell is the one that is never written to a file: it evaluates the script from `$PROFILE` instead.
 
 ```{.powershell filename="PowerShell"}
 minato completions powershell | Out-String | Invoke-Expression
 ```
 
-Append that line to the file `$PROFILE` names to have it apply to every session.
-
-### elvish
-
-```{.bash filename="Terminal"}
-mkdir -p ~/.config/elvish/lib
-minato completions elvish > ~/.config/elvish/lib/minato.elv
-```
-
-```{.bash filename="~/.config/elvish/rc.elv"}
-use minato
-```
-
-:::
-
-Open a new shell, then `minato <Tab>` lists the commands and `minato clone --<Tab>` lists that command's flags.
-
 The script comes from the same definitions the binary is built from, so it can never offer a command that does not exist.
-It does have to be regenerated after an upgrade that adds one.
+It does have to be regenerated after an upgrade that adds one, which `minato doctor` reports and `--install` carries out.
 
 In `bash`, `zsh`, and `fish`, flags with a fixed set of values complete those too, so `minato status --state <Tab>` offers all eight states.
 The `powershell` and `elvish` scripts complete commands and flag names only.
@@ -212,10 +164,10 @@ A completion script is a copy of the command surface taken when it was generated
 completions:
 1 of 2 found out of date
 Regenerate:
-  minato completions fish > /Users/you/.config/fish/completions/minato.fish
+  minato completions fish --install
 ```
 
-The places searched are the ones named under [Enable completion](#enable-completion), with `$ZSH_CUSTOM` honoured when oh-my-zsh has been moved.
+The places searched are the ones set out in [Shells](../shells.qmd), with `$ZSH_CUSTOM` honoured when oh-my-zsh has been moved.
 A shell you have not set up is never mentioned, and PowerShell is not searched at all, since its script is evaluated from `$PROFILE` rather than saved to a file.
 
 ## See what has drifted

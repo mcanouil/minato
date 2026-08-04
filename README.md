@@ -102,15 +102,21 @@ Cached output says how old it is, so stale data never passes for fresh, and it s
 
 ## Completion
 
-`minato completions <shell>` prints a completion script for `bash`, `zsh`, `fish`, `powershell`, or `elvish`.
+`minato completions <shell>` prints a completion script for `bash`, `zsh`, `fish`, `powershell`, or `elvish`, and `--install` puts it where the shell reads it.
 
 ```sh
+minato completions --install          # the shell taken from $SHELL
+minato completions zsh --install --dry-run
+minato completions zsh --uninstall
 minato completions zsh > ~/.zfunc/_minato
 ```
 
-It goes to standard output rather than to a path Minato picks, because where a completion script belongs is the shell's business.
+Everything is written under your home directory, apart from zsh on a machine with Homebrew, where the file goes in the prefix's own completions directory.
+Your shell's configuration is edited only where the file alone is not enough, inside a managed block that re-running replaces and `--uninstall` removes.
+A script already on disk is updated where it is rather than moved.
+
 The script is generated from the command definitions, so it offers exactly the commands and flags the binary has.
-Where each shell looks for it is in [Get started](https://m.canouil.dev/minato/get-started/#enable-completion).
+Every destination is set out in [Shells](https://m.canouil.dev/minato/shells.html).
 
 ## Documentation
 
