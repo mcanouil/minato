@@ -59,6 +59,55 @@ async fn state_values_reach_the_shells_that_carry_them() {
     }
 }
 
+/// The installer checks the same places the binary installs into, in shell
+/// rather than in Rust, so the list is written twice and can drift. This is
+/// what the two copies are compared on; the home directory and the environment
+/// overrides are exactly what cannot be compared.
+#[test]
+fn the_installer_checks_every_place_the_binary_installs_into() {
+    // The installer writes the binary's name through a variable, which is the
+    // right thing for a shell script and unreadable to a plain search, so it is
+    // expanded here rather than spelled out twice there.
+    let installer = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/install.sh"),
+    )
+    .expect("reading docs/install.sh")
+    .replace("${BINARY_NAME}", "minato");
+
+    let home = std::path::Path::new("/home/someone");
+    let environment = cli::completions::Environment {
+        home: home.to_owned(),
+        data: home.join(".local/share"),
+        config: home.join(".config"),
+        oh_my_zsh: home.join(".oh-my-zsh/custom"),
+        homebrew: Some(std::path::PathBuf::from("/opt/homebrew")),
+    };
+
+    for location in cli::completions::conventional_paths(&environment) {
+        assert!(
+            installer.contains(location.convention),
+            "docs/install.sh never looks in {}, which {} reads",
+            location.convention,
+            location.shell
+        );
+    }
+}
+
+/// The command a stale script is reported with has to be one that works, and
+/// the installer and `doctor` have to print the same one.
+#[test]
+fn the_installer_offers_the_command_that_installs() {
+    let installer = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/install.sh"),
+    )
+    .expect("reading docs/install.sh");
+
+    assert!(
+        installer.contains("completions ${shell} --install"),
+        "docs/install.sh does not offer `minato completions <shell> --install`"
+    );
+}
+
 #[test]
 fn an_unknown_shell_is_refused_with_the_ones_that_work() {
     let error = Cli::try_parse_from(["minato", "completions", "nonsense"])

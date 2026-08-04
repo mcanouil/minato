@@ -43,26 +43,41 @@ error() {
 	exit 1
 }
 
-# Where a completion script written as `minato completions` describes would be.
+# Where a completion script installed by `minato completions --install` would
+# be.
 #
-# Mirrors `completion_locations` in src/cli/mod.rs, which `minato doctor` uses;
-# keep the two in step. $fpath is a zsh variable and this is bash, so the zsh
-# entries are the conventional directories rather than a real search of it, and
-# $ZSH_CUSTOM is read for an oh-my-zsh that has been moved even though a
-# `curl | bash` pipe will rarely have it exported.
+# Mirrors `known_locations` in src/cli/completions.rs, which `minato doctor`
+# uses; keep the two in step, which a test compares them on. $fpath is a zsh
+# variable and this is bash, so the zsh entries are the conventional
+# directories rather than a real search of it, and $ZSH_CUSTOM is read for an
+# oh-my-zsh that has been moved even though a `curl | bash` pipe will rarely
+# have it exported.
 #
 # PowerShell is absent for a reason of its own: the documented setup evaluates
 # the script from $PROFILE at every session, so it regenerates itself and can
 # never be stale.
 completion_locations() {
 	local zsh_custom="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}"
+	local data="${XDG_DATA_HOME:-${HOME}/.local/share}"
+	local config="${XDG_CONFIG_HOME:-${HOME}/.config}"
+	local brew="${HOMEBREW_PREFIX:-}"
 
 	printf '%s\t%s\n' \
-		bash "${HOME}/.local/share/bash-completion/completions/${BINARY_NAME}" \
-		zsh "${HOME}/.zfunc/_${BINARY_NAME}" \
+		bash "${data}/bash-completion/completions/${BINARY_NAME}" \
+		bash "${data}/${BINARY_NAME}-completions/${BINARY_NAME}.bash" \
 		zsh "${zsh_custom}/completions/_${BINARY_NAME}" \
-		fish "${HOME}/.config/fish/completions/${BINARY_NAME}.fish" \
-		elvish "${HOME}/.config/elvish/lib/${BINARY_NAME}.elv"
+		zsh "${HOME}/.zfunc/_${BINARY_NAME}" \
+		zsh "${data}/zsh/site-functions/_${BINARY_NAME}" \
+		fish "${config}/fish/completions/${BINARY_NAME}.fish" \
+		elvish "${config}/elvish/lib/${BINARY_NAME}.elv"
+
+	# Homebrew's own share/zsh/site-functions, which its shell setup puts on
+	# $fpath. Only $HOMEBREW_PREFIX is consulted here: probing /opt/homebrew and
+	# /usr/local, as the binary does, would report on a prefix this installer
+	# never wrote to.
+	if [ -n "${brew}" ]; then
+		printf '%s\t%s\n' zsh "${brew}/share/zsh/site-functions/_${BINARY_NAME}"
+	fi
 }
 
 # Names the completion scripts the version just installed would generate
@@ -75,7 +90,7 @@ completion_locations() {
 # silent.
 report_stale_completions() {
 	local binary="$1"
-	local shell path generated announced=0
+	local shell path generated announced=0 announced_shells=""
 
 	# No HOME means no conventional location to look in, and `set -u` would
 	# trip on the lookups below.
@@ -92,7 +107,15 @@ report_stale_completions() {
 			warn "Completion scripts do not update themselves. Regenerate:"
 			announced=1
 		fi
-		echo "  ${BINARY_NAME} completions ${shell} > ${path}"
+		# One command per shell rather than per file: --install finds the file
+		# itself, so two stale copies of one shell's script are one command.
+		case " ${announced_shells} " in
+		*" ${shell} "*) ;;
+		*)
+			announced_shells="${announced_shells} ${shell}"
+			echo "  ${BINARY_NAME} completions ${shell} --install"
+			;;
+		esac
 	done < <(completion_locations)
 
 	if [ "${announced}" -eq 1 ]; then

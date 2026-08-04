@@ -4,6 +4,7 @@
 //! reach any outcome without an interactive interface. Each command offers a
 //! table for reading and `--json` for consuming.
 
+pub mod completions;
 mod narrowing;
 mod render;
 
@@ -218,23 +219,42 @@ pub enum Command {
         selection: Selection,
     },
 
-    /// Print a shell completion script.
+    /// Print a shell completion script, or install one.
     ///
     /// The script goes to standard output and where to put it goes to standard
     /// error, so `minato completions zsh > _minato` writes the script alone
     /// while the instructions still reach the terminal. Run it without
     /// redirecting to read them, or see
-    /// <https://m.canouil.dev/minato/get-started/#enable-completion>.
+    /// <https://m.canouil.dev/minato/shells.html>.
+    ///
+    /// `--install` writes it where the shell reads it instead, and edits the
+    /// shell's configuration only where the file alone is not enough. A script
+    /// already on disk is updated wherever it is, rather than moved.
     ///
     /// It is generated from the command definitions, so it cannot describe a
     /// command the binary does not have, and it needs regenerating after an
-    /// upgrade that adds one.
+    /// upgrade that adds one. `minato doctor` says when one has gone stale.
+    // The group exists so that --dry-run can require one of the two actions:
+    // there is nothing to preview about printing a script to standard output.
+    #[command(group = clap::ArgGroup::new("action").args(["install", "uninstall"]))]
     Completions {
         #[command(flatten)]
         selection: Selection,
 
-        /// Which shell to generate for.
-        shell: clap_complete::Shell,
+        /// Which shell to generate for, taken from $SHELL when left out.
+        shell: Option<clap_complete::Shell>,
+
+        /// Write the script where the shell reads it, rather than printing it.
+        #[arg(long, conflicts_with = "uninstall")]
+        install: bool,
+
+        /// Remove the installed script, and the managed block that reaches it.
+        #[arg(long)]
+        uninstall: bool,
+
+        /// Report every path that would change, and change nothing.
+        #[arg(long, requires = "action")]
+        dry_run: bool,
     },
 
     /// Browse repositories interactively.
@@ -295,6 +315,10 @@ pub enum CliError {
         #[source]
         source: std::io::Error,
     },
+
+    /// A completion script could not be printed or installed.
+    #[error(transparent)]
+    Completions(#[from] completions::CompletionsError),
 
     /// A repository could not be moved.
     #[error(transparent)]
@@ -416,13 +440,13 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
             command: AuthCommand::Status { .. },
         } => Ok(auth_status(cli.json).into()),
         Command::Doctor { .. } => doctor(cli.json).map(Into::into),
-        Command::Completions { shell, .. } => {
-            // On standard error, so a redirect into the shell's completion
-            // directory captures the script and leaves the instructions on
-            // the terminal, where they are of use.
-            eprintln!("{}", completion_hint(*shell));
-            Ok(completions(*shell).into())
-        }
+        Command::Completions {
+            shell,
+            install,
+            uninstall,
+            dry_run,
+            ..
+        } => completion_command(*shell, *install, *uninstall, *dry_run).map(Into::into),
         Command::Tui { .. } => tui(cli).await,
         Command::Refresh { .. } => refresh(cli.json).map(Into::into),
         Command::List { .. } => list(cli).await.map(Into::into),
@@ -894,10 +918,8 @@ fn doctor(as_json: bool) -> Result<String, CliError> {
             // A completion script is a copy of the command surface taken when
             // it was generated, so an upgrade that adds a command leaves it
             // quietly offering the old one. Nothing else would ever say so.
-            if let Some(home) = paths.home.as_deref() {
-                let zsh_custom = std::env::var_os("ZSH_CUSTOM").map(PathBuf::from);
-                let (ok, detail) =
-                    completion_check(&completion_locations(home, zsh_custom.as_deref()));
+            if let Ok(environment) = completions::Environment::from_env() {
+                let (ok, detail) = completion_check(&completions::conventional_paths(&environment));
 
                 checks.push(("completions".to_owned(), ok, detail));
             }
@@ -957,124 +979,70 @@ fn refresh(as_json: bool) -> Result<String, CliError> {
     Ok(format!("Cleared {}.", paths.cache.root().display()))
 }
 
-/// Generates a completion script for a shell.
+/// Prints a completion script, installs one, or removes one.
 ///
-/// The name completed is the one the command carries rather than the one it
-/// was invoked by, so a script written from a build directory, or from a copy
-/// under another name, still completes the command as it is installed.
-fn completions(shell: clap_complete::Shell) -> String {
-    // The hidden surface, so a script never offers a flag its command refuses.
-    let mut command = command();
-    let name = command.get_name().to_owned();
-    let mut script = Vec::new();
-    clap_complete::generate(shell, &mut command, name, &mut script);
-
-    String::from_utf8(script).expect("clap_complete writes UTF-8")
-}
-
-/// Where the per-shell instructions live, for the hint to point at when the
-/// few lines it can spare are not enough.
-const COMPLETION_DOCS: &str = "https://m.canouil.dev/minato/get-started/#enable-completion";
-
-/// What to do with the script a shell was just handed.
-///
-/// Printed to standard error rather than returned with the script, so that
-/// `minato completions zsh > _minato` writes the script alone while the
-/// instructions still reach the terminal.
-fn completion_hint(shell: clap_complete::Shell) -> String {
-    use clap_complete::Shell;
-
-    let steps = match shell {
-        Shell::Bash => "Write it to ~/.local/share/bash-completion/completions/minato.".to_owned(),
-        // oh-my-zsh puts its custom completions directory on $fpath and runs
-        // compinit itself, so naming it first spares those users an edit to
-        // ~/.zshrc that would do nothing.
-        Shell::Zsh => [
-            "Write it as _minato in a directory on $fpath.",
-            "With oh-my-zsh, ~/.oh-my-zsh/custom/completions needs nothing further.",
-            "Otherwise, such as ~/.zfunc, have compinit run after it is added:",
-            "  fpath=(~/.zfunc $fpath)",
-            "  autoload -Uz compinit && compinit",
-        ]
-        .join("\n"),
-        Shell::Fish => "Write it to ~/.config/fish/completions/minato.fish.".to_owned(),
-        Shell::Elvish => [
-            "Write it to ~/.config/elvish/lib/minato.elv,",
-            "then load it from ~/.config/elvish/rc.elv:",
-            "  use minato",
-        ]
-        .join("\n"),
-        Shell::PowerShell => [
-            "Evaluate it rather than saving it:",
-            "  minato completions powershell | Out-String | Invoke-Expression",
-            "Add that line to the file $PROFILE names to have it apply to every session.",
-        ]
-        .join("\n"),
-        // `Shell` is non-exhaustive, so a shell added by a future
-        // `clap_complete` still gets pointed somewhere useful rather than
-        // failing to compile or saying nothing at all.
-        _ => format!("Install it where {shell} looks for completion scripts for minato."),
+/// Printing is the default because it composes: a redirect, a pipe into
+/// `Invoke-Expression`, or a look at what would be written all start here. The
+/// instructions go to standard error so that a redirect captures the script
+/// alone and still leaves them on the terminal.
+fn completion_command(
+    shell: Option<clap_complete::Shell>,
+    install: bool,
+    uninstall: bool,
+    dry_run: bool,
+) -> Result<String, CliError> {
+    let shell = match shell {
+        Some(shell) => shell,
+        None => completions::shell_from_env()?,
     };
 
-    format!("{steps}\nSee {COMPLETION_DOCS}")
-}
+    if uninstall {
+        let environment = completions::Environment::from_env()?;
+        return Ok(completions::uninstall(&environment, shell, dry_run)?);
+    }
 
-/// Where a completion script written as `completion_hint` describes would be.
-///
-/// Every shell is searched regardless of which one is running, because
-/// `$SHELL` names the login shell rather than the one in use, and because a
-/// location only reports on itself when a file is actually there. Someone who
-/// completes in fish is not told anything about bash.
-///
-/// PowerShell is absent on purpose: its script is evaluated from `$PROFILE`
-/// rather than saved, and `$PROFILE` is a PowerShell variable rather than an
-/// environment one, so there is nothing to find from outside PowerShell.
-fn completion_locations(
-    home: &Path,
-    zsh_custom: Option<&Path>,
-) -> Vec<(clap_complete::Shell, PathBuf)> {
-    use clap_complete::Shell;
+    if install {
+        let environment = completions::Environment::from_env()?;
+        let plan = completions::plan(&environment, shell)?;
 
-    // oh-my-zsh puts this on $fpath itself, and lets it be moved with
-    // $ZSH_CUSTOM, so an installation that was relocated is still found.
-    let oh_my_zsh = zsh_custom.map_or_else(|| home.join(".oh-my-zsh/custom"), Path::to_path_buf);
+        return if dry_run {
+            Ok(completions::describe(&plan))
+        } else {
+            Ok(completions::install(&plan, &completions::script(shell))?)
+        };
+    }
 
-    vec![
-        (
-            Shell::Bash,
-            home.join(".local/share/bash-completion/completions/minato"),
-        ),
-        (Shell::Zsh, home.join(".zfunc/_minato")),
-        (Shell::Zsh, oh_my_zsh.join("completions/_minato")),
-        (
-            Shell::Fish,
-            home.join(".config/fish/completions/minato.fish"),
-        ),
-        (Shell::Elvish, home.join(".config/elvish/lib/minato.elv")),
-    ]
+    eprintln!("{}", completions::hint(shell));
+
+    Ok(completions::script(shell))
 }
 
 /// Whether each completion script on disk still matches the command surface.
 ///
 /// The comparison is the whole script, byte for byte, against what would be
-/// generated now. That needs no version to be recorded anywhere and cannot be
-/// fooled by a release that changed a flag without changing a version the
-/// script carries.
-fn completion_check(locations: &[(clap_complete::Shell, PathBuf)]) -> (bool, String) {
+/// generated now. That needs no version recorded anywhere and cannot be fooled
+/// by a release that changed a flag without changing a version the script
+/// carries.
+///
+/// Every shell is searched regardless of which one is running, because `$SHELL`
+/// names the login shell rather than the one in use, and because a location
+/// only reports on itself when a file is actually there. Someone who completes
+/// in fish is told nothing about bash.
+fn completion_check(locations: &[completions::Location]) -> (bool, String) {
     let mut current = Vec::new();
     let mut stale = Vec::new();
 
-    for (shell, path) in locations {
-        let Ok(found) = std::fs::read_to_string(path) else {
+    for location in locations {
+        let Ok(found) = std::fs::read_to_string(&location.path) else {
             // Absent, or unreadable, which for this check are the same: there
             // is nothing to say about a script that is not there to be used.
             continue;
         };
 
-        if found == completions(*shell) {
-            current.push(path.display().to_string());
+        if found == completions::script(location.shell) {
+            current.push(location.path.display().to_string());
         } else {
-            stale.push(format!("  minato completions {shell} > {}", path.display()));
+            stale.push(format!("  minato completions {} --install", location.shell));
         }
     }
 
@@ -1087,12 +1055,15 @@ fn completion_check(locations: &[(clap_complete::Shell, PathBuf)]) -> (bool, Str
     }
 
     // The first line is the whole of what the table shows, so it has to stand
-    // on its own. The commands follow underneath, one per stale script, since
-    // the command to run is the answer and it differs per shell and per path.
+    // on its own. The commands follow underneath, one per shell rather than one
+    // per file: `--install` finds the file itself, so two stale copies of one
+    // shell's script are one command to run, not two.
+    let out_of_date = stale.len();
+    stale.sort();
+    stale.dedup();
     let detail = format!(
-        "{} of {} found out of date\nRegenerate:\n{}",
-        stale.len(),
-        stale.len() + current.len(),
+        "{out_of_date} of {} found out of date\nRegenerate:\n{}",
+        out_of_date + current.len(),
         stale.join("\n")
     );
 
@@ -1482,70 +1453,16 @@ mod tests {
         Cli::command().debug_assert();
     }
 
-    /// Driven by the shells `clap_complete` offers rather than by a list
-    /// written here, so a shell added by a future version is caught rather
-    /// than left with the fallback wording.
-    #[test]
-    fn every_shell_is_told_where_its_script_goes() {
-        use clap::ValueEnum;
-
-        for shell in clap_complete::Shell::value_variants() {
-            let hint = completion_hint(*shell);
-
-            assert!(
-                hint.contains("minato"),
-                "the {shell} hint never names the binary: {hint}"
-            );
-            assert!(
-                hint.contains(COMPLETION_DOCS),
-                "the {shell} hint never points at the instructions: {hint}"
-            );
+    /// An environment rooted in a temporary directory, so that a check never
+    /// reads the home of whoever is running the tests.
+    fn environment(home: &Path) -> completions::Environment {
+        completions::Environment {
+            home: home.to_owned(),
+            data: home.join(".local/share"),
+            config: home.join(".config"),
+            oh_my_zsh: home.join(".oh-my-zsh/custom"),
+            homebrew: None,
         }
-    }
-
-    /// The locations doctor searches have to be the ones the hint tells people
-    /// to use, or a script written where it was asked for goes unnoticed.
-    #[test]
-    fn the_places_searched_are_the_places_the_hint_names() {
-        let home = Path::new("/home/someone");
-        let locations = completion_locations(home, None);
-
-        for expected in [
-            "/home/someone/.local/share/bash-completion/completions/minato",
-            "/home/someone/.zfunc/_minato",
-            "/home/someone/.oh-my-zsh/custom/completions/_minato",
-            "/home/someone/.config/fish/completions/minato.fish",
-            "/home/someone/.config/elvish/lib/minato.elv",
-        ] {
-            assert!(
-                locations
-                    .iter()
-                    .any(|(_, path)| path == Path::new(expected)),
-                "nothing searches {expected}: {locations:?}"
-            );
-        }
-    }
-
-    /// oh-my-zsh lets its custom directory be moved with `$ZSH_CUSTOM`, and a
-    /// search fixed on the default would miss a script that is correctly
-    /// installed.
-    #[test]
-    fn a_relocated_oh_my_zsh_is_searched_where_it_actually_is() {
-        let home = Path::new("/home/someone");
-        let locations = completion_locations(home, Some(Path::new("/elsewhere/custom")));
-
-        assert!(
-            locations
-                .iter()
-                .any(|(_, path)| path == Path::new("/elsewhere/custom/completions/_minato")),
-            "the relocated directory is not searched: {locations:?}"
-        );
-        assert!(
-            !locations
-                .iter()
-                .any(|(_, path)| path.starts_with("/home/someone/.oh-my-zsh")),
-            "the default is searched as well as the relocated one: {locations:?}"
-        );
     }
 
     /// Someone who has never set completion up is not doing anything wrong, so
@@ -1553,7 +1470,9 @@ mod tests {
     #[test]
     fn no_script_anywhere_is_not_a_complaint() {
         let home = tempfile::tempdir().expect("a temporary directory");
-        let (ok, detail) = completion_check(&completion_locations(home.path(), None));
+
+        let (ok, detail) =
+            completion_check(&completions::conventional_paths(&environment(home.path())));
 
         assert!(ok, "an absent script was reported as a problem: {detail}");
         assert!(detail.contains("none found"), "{detail}");
@@ -1564,9 +1483,11 @@ mod tests {
         let home = tempfile::tempdir().expect("a temporary directory");
         let script = home.path().join(".zfunc/_minato");
         std::fs::create_dir_all(script.parent().expect("a parent")).expect("the directory");
-        std::fs::write(&script, completions(clap_complete::Shell::Zsh)).expect("the script");
+        std::fs::write(&script, completions::script(clap_complete::Shell::Zsh))
+            .expect("the script");
 
-        let (ok, detail) = completion_check(&completion_locations(home.path(), None));
+        let (ok, detail) =
+            completion_check(&completions::conventional_paths(&environment(home.path())));
 
         assert!(ok, "a current script was reported as stale: {detail}");
         assert!(detail.contains("current"), "{detail}");
@@ -1581,89 +1502,48 @@ mod tests {
         let script = home.path().join(".config/fish/completions/minato.fish");
         std::fs::create_dir_all(script.parent().expect("a parent")).expect("the directory");
 
-        let outdated = completions(clap_complete::Shell::Fish).replace("sync-fork", "sync-forks");
+        let outdated =
+            completions::script(clap_complete::Shell::Fish).replace("sync-fork", "sync-forks");
         std::fs::write(&script, outdated).expect("the script");
 
-        let (ok, detail) = completion_check(&completion_locations(home.path(), None));
+        let (ok, detail) =
+            completion_check(&completions::conventional_paths(&environment(home.path())));
 
         assert!(!ok, "a stale script was reported as current: {detail}");
         // Naming the file is not enough: the answer to "what do I do about it"
-        // is the command, and it differs per shell and per path.
+        // is the command, and it differs per shell.
         assert!(
-            detail.contains("minato completions fish >"),
+            detail.contains("minato completions fish --install"),
             "the report never says how to refresh it: {detail}"
         );
-        assert!(detail.contains("minato.fish"), "{detail}");
     }
 
-    /// The destination is the whole point of the hint, so each shell has to
-    /// name its own rather than share a generic sentence.
+    /// Two stale copies of one shell's script are one command to run, since
+    /// `--install` finds the file itself.
     #[test]
-    fn each_shell_names_the_destination_its_own_convention_expects() {
-        use clap_complete::Shell;
+    fn one_shell_with_two_stale_copies_is_reported_once() {
+        let home = tempfile::tempdir().expect("a temporary directory");
+        let outdated =
+            completions::script(clap_complete::Shell::Zsh).replace("sync-fork", "sync-forks");
 
-        for (shell, expected) in [
-            (Shell::Bash, "bash-completion/completions/minato"),
-            (Shell::Zsh, "_minato"),
-            (Shell::Fish, "completions/minato.fish"),
-            (Shell::Elvish, "minato.elv"),
-            (Shell::PowerShell, "Invoke-Expression"),
+        for path in [
+            home.path().join(".zfunc/_minato"),
+            home.path().join(".oh-my-zsh/custom/completions/_minato"),
         ] {
-            let hint = completion_hint(shell);
-
-            assert!(
-                hint.contains(expected),
-                "the {shell} hint never names {expected}: {hint}"
-            );
-        }
-    }
-
-    /// zsh and elvish need a step beyond writing the file, and a hint that
-    /// stopped at the path would leave completion silently not working.
-    ///
-    /// The lines asserted are the ones meant to be pasted, not the prose
-    /// around them: naming compinit in a sentence while printing a broken
-    /// command would read as correct and not work.
-    #[test]
-    fn the_shells_that_need_a_second_step_say_so() {
-        let zsh = completion_hint(clap_complete::Shell::Zsh);
-
-        for line in [
-            "fpath=(~/.zfunc $fpath)",
-            "autoload -Uz compinit && compinit",
-        ] {
-            assert!(
-                zsh.contains(line),
-                "the zsh hint never prints `{line}`: {zsh}"
-            );
+            std::fs::create_dir_all(path.parent().expect("a parent")).expect("the directory");
+            std::fs::write(&path, &outdated).expect("the script");
         }
 
-        // The directory oh-my-zsh already has on $fpath, where the compinit
-        // lines above are unnecessary.
-        assert!(
-            zsh.contains("~/.oh-my-zsh/custom/completions"),
-            "the zsh hint never names the oh-my-zsh directory: {zsh}"
+        let (ok, detail) =
+            completion_check(&completions::conventional_paths(&environment(home.path())));
+
+        assert!(!ok, "{detail}");
+        assert_eq!(
+            detail.matches("minato completions zsh --install").count(),
+            1,
+            "{detail}"
         );
-
-        let elvish = completion_hint(clap_complete::Shell::Elvish);
-        assert!(
-            elvish.contains("use minato"),
-            "the elvish hint never mentions loading the module: {elvish}"
-        );
-    }
-
-    /// The hint goes to standard error precisely so that a redirect captures
-    /// the script alone, so nothing of it may leak into the returned text.
-    #[test]
-    fn the_hint_stays_out_of_the_script() {
-        use clap::ValueEnum;
-
-        for shell in clap_complete::Shell::value_variants() {
-            assert!(
-                !completions(*shell).contains(COMPLETION_DOCS),
-                "the {shell} script carries the hint that belongs on stderr"
-            );
-        }
+        assert!(detail.contains("2 of 2"), "{detail}");
     }
 
     #[test]

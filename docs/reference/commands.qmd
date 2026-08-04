@@ -24,7 +24,7 @@ Overview and sync of Git repositories across hosting providers
 * `refresh` — Discard cached data so the next run asks the provider again
 * `auth` — Inspect authentication
 * `doctor` — Check that configuration and tooling are usable
-* `completions` — Print a shell completion script
+* `completions` — Print a shell completion script, or install one
 
 ###### **Options:**
 
@@ -375,17 +375,19 @@ Check that configuration and tooling are usable
 
 ## `minato completions`
 
-Print a shell completion script.
+Print a shell completion script, or install one.
 
-The script goes to standard output and where to put it goes to standard error, so `minato completions zsh > _minato` writes the script alone while the instructions still reach the terminal. Run it without redirecting to read them, or see <https://m.canouil.dev/minato/get-started/#enable-completion>.
+The script goes to standard output and where to put it goes to standard error, so `minato completions zsh > _minato` writes the script alone while the instructions still reach the terminal. Run it without redirecting to read them, or see <https://m.canouil.dev/minato/shells.html>.
 
-It is generated from the command definitions, so it cannot describe a command the binary does not have, and it needs regenerating after an upgrade that adds one.
+`--install` writes it where the shell reads it instead, and edits the shell's configuration only where the file alone is not enough. A script already on disk is updated wherever it is, rather than moved.
 
-**Usage:** `minato completions [OPTIONS] <SHELL>`
+It is generated from the command definitions, so it cannot describe a command the binary does not have, and it needs regenerating after an upgrade that adds one. `minato doctor` says when one has gone stale.
+
+**Usage:** `minato completions [OPTIONS] [SHELL]`
 
 ###### **Arguments:**
 
-* `<SHELL>` — Which shell to generate for
+* `<SHELL>` — Which shell to generate for, taken from $SHELL when left out
 
   Possible values: `bash`, `elvish`, `fish`, `powershell`, `zsh`
 
@@ -393,6 +395,9 @@ It is generated from the command definitions, so it cannot describe a command th
 ###### **Options:**
 
 * `--include-forks` — Include forks, which are hidden by default
+* `--install` — Write the script where the shell reads it, rather than printing it
+* `--uninstall` — Remove the installed script, and the managed block that reaches it
+* `--dry-run` — Report every path that would change, and change nothing
 
 
 
