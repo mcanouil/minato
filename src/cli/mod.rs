@@ -1491,7 +1491,7 @@ mod tests {
 
         assert!(ok, "a current script was reported as stale: {detail}");
         assert!(detail.contains("current"), "{detail}");
-        assert!(detail.contains(".zfunc/_minato"), "{detail}");
+        assert!(detail.contains(&script.display().to_string()), "{detail}");
     }
 
     /// The point of the check: a script generated before a release that added
