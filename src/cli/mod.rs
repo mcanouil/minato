@@ -1481,7 +1481,10 @@ mod tests {
     #[test]
     fn a_script_matching_what_the_binary_generates_is_current() {
         let home = tempfile::tempdir().expect("a temporary directory");
-        let script = home.path().join(".zfunc/_minato");
+        // One component per join, as `zsh_locations` does. A single
+        // `".zfunc/_minato"` names the same file, but keeps the slash verbatim,
+        // so on Windows it renders where the reported path renders a backslash.
+        let script = home.path().join(".zfunc").join("_minato");
         std::fs::create_dir_all(script.parent().expect("a parent")).expect("the directory");
         std::fs::write(&script, completions::script(clap_complete::Shell::Zsh))
             .expect("the script");
