@@ -127,8 +127,8 @@ Clone repositories that have no local copy
    Where a repository belongs is a judgement its identity does not carry, so it is chosen here rather than derived.
 * `--into-group <GROUP>` — Put them in this group, which is the directory path that group already occupies beneath a root, such as `perso/apps`.
 
-   This is not the same as the `--group` filter, which selects by where a clone already sits. A repository that has not been cloned is in no group, so filtering by one would match nothing.
-* `--dry-run` — Report what would be cloned, and change nothing
+   This is not the same as the `--group` filter, which selects by where a clone already sits. A repository that has not been cloned is in no group, so filtering by one matches nothing.
+* `--dry-run` — Report what cloning targets, and change nothing
 * `--shallow` — Clone with a truncated history
 
 
@@ -175,7 +175,7 @@ Fetch every local clone. This never touches a working tree
 * `--include-external` — Include clones of repositories owned by nobody you track, which are hidden by default.
 
    This describes a clone, so only the commands that scan take it: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
-* `--dry-run` — Report what would be fetched, and change nothing
+* `--dry-run` — Report what fetching targets, and change nothing
 
 
 
@@ -221,7 +221,7 @@ Fast-forward clones that are strictly behind and clean
 * `--include-external` — Include clones of repositories owned by nobody you track, which are hidden by default.
 
    This describes a clone, so only the commands that scan take it: `status`, `clone`, `fetch`, `update`, and `tui`. Anywhere else it is refused rather than ignored.
-* `--dry-run` — Report what would be updated, and change nothing
+* `--dry-run` — Report what updating targets, and change nothing
 
 
 
@@ -299,7 +299,7 @@ Only a fork strictly behind its upstream is synced, through GitHub's merge-upstr
 
    Every command that works on a selection takes this. One that names its subject outright, or touches no repository at all, refuses it rather than ignoring it.
 * `--include-forks` — Include forks, which are hidden by default
-* `--dry-run` — Report what would be synced, and change nothing
+* `--dry-run` — Report what syncing targets, and change nothing
 
 
 
@@ -319,7 +319,7 @@ Deliberately one repository at a time: this changes the filesystem, so it is nev
 
 * `--include-forks` — Include forks, which are hidden by default
 * `--to-group <GROUP>` — The group to move it into, which is a directory path beneath its root, such as `perso/apps`
-* `--dry-run` — Report what would move, and change nothing
+* `--dry-run` — Report what moving targets, and change nothing
 
 
 
@@ -397,7 +397,7 @@ It is generated from the command definitions, so it cannot describe a command th
 * `--include-forks` — Include forks, which are hidden by default
 * `--install` — Write the script where the shell reads it, rather than printing it
 * `--uninstall` — Remove the installed script, and the managed block that reaches it
-* `--dry-run` — Report every path that would change, and change nothing
+* `--dry-run` — Report every path that installing targets, and change nothing
 
 
 
