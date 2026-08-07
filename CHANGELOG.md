@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+
+- docs: clarify wording across the README, documentation site, CLI help text, and error messages (#4719038).
+
 ## 0.4.0 (2026-08-04)
 
 ### Breaking changes
