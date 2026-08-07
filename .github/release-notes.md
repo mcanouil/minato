@@ -10,7 +10,7 @@ curl -fsSL https://m.canouil.dev/minato/install.sh | bash -s -- --version %%VERS
 ```
 
 The script picks the archive for your machine, verifies it against `SHA256SUMS`, and installs into `/usr/local/bin` when writable, otherwise `~/.local/bin`.
-It needs `bash` and `curl`; on a minimal distribution such as Alpine, install them first with `apk add bash curl`.
+It needs `bash` and `curl`. On a minimal distribution such as Alpine, install them first with `apk add bash curl`.
 
 On Windows:
 
@@ -44,7 +44,7 @@ install -m 0755 minato /usr/local/bin/minato
 ```
 
 On macOS, `shasum -a 256 --ignore-missing --check SHA256SUMS` does the same job.
-On Windows, the script above does all of this for you; to do it by hand, unzip the `.zip` and put `minato.exe` somewhere on `PATH`.
+On Windows, the script above does all of this for you. To do it by hand, unzip the `.zip` and put `minato.exe` somewhere on `PATH`.
 
 ### With Rust already installed
 

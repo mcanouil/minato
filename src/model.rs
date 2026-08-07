@@ -71,7 +71,7 @@ impl From<Provider> for String {
 /// A provider name that `minato` does not recognise.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
-    "unknown provider `{name}`; supported providers: {}",
+    "unknown provider `{name}`. Supported providers: {}",
     Provider::supported()
 )]
 pub struct UnknownProviderError {
@@ -175,28 +175,28 @@ impl From<RepoId> for String {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseRepoIdError {
     /// The `provider:` prefix was absent.
-    #[error("repository `{input}` has no provider prefix; {REPO_ID_FORM}")]
+    #[error("repository `{input}` has no provider prefix. {REPO_ID_FORM}")]
     MissingProvider {
         /// The text that failed to parse.
         input: String,
     },
 
     /// The `owner/name` separator was absent.
-    #[error("repository `{input}` has no owner; {REPO_ID_FORM}")]
+    #[error("repository `{input}` has no owner. {REPO_ID_FORM}")]
     MissingOwner {
         /// The text that failed to parse.
         input: String,
     },
 
     /// More than one `/` appeared after the provider.
-    #[error("repository `{input}` has more than one `/` after the provider; {REPO_ID_FORM}")]
+    #[error("repository `{input}` has more than one `/` after the provider. {REPO_ID_FORM}")]
     TooManySeparators {
         /// The text that failed to parse.
         input: String,
     },
 
     /// The owner or the name was empty.
-    #[error("repository `{input}` has an empty {part}; {REPO_ID_FORM}")]
+    #[error("repository `{input}` has an empty {part}. {REPO_ID_FORM}")]
     EmptyPart {
         /// The text that failed to parse.
         input: String,
@@ -206,7 +206,7 @@ pub enum ParseRepoIdError {
 
     /// The owner or the name held a character that cannot appear in one.
     #[error(
-        "repository `{input}` has `{character}` in its {part}, which is not allowed; an {part} may hold letters, digits, `-`, `_`, and `.`"
+        "repository `{input}` has `{character}` in its {part}, which is not allowed. An {part} can hold letters, digits, `-`, `_`, and `.`"
     )]
     InvalidCharacter {
         /// The text that failed to parse.

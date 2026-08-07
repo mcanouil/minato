@@ -132,11 +132,11 @@ pub enum Command {
         ///
         /// This is not the same as the `--group` filter, which selects by
         /// where a clone already sits. A repository that has not been cloned
-        /// is in no group, so filtering by one would match nothing.
+        /// is in no group, so filtering by one matches nothing.
         #[arg(long = "into-group", value_name = "GROUP", conflicts_with = "into")]
         group: Option<String>,
 
-        /// Report what would be cloned, and change nothing.
+        /// Report what cloning targets, and change nothing.
         #[arg(long)]
         dry_run: bool,
 
@@ -150,7 +150,7 @@ pub enum Command {
         #[command(flatten)]
         selection: Selection,
 
-        /// Report what would be fetched, and change nothing.
+        /// Report what fetching targets, and change nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -160,7 +160,7 @@ pub enum Command {
         #[command(flatten)]
         selection: Selection,
 
-        /// Report what would be updated, and change nothing.
+        /// Report what updating targets, and change nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -174,7 +174,7 @@ pub enum Command {
         #[command(flatten)]
         selection: Selection,
 
-        /// Report what would be synced, and change nothing.
+        /// Report what syncing targets, and change nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -196,7 +196,7 @@ pub enum Command {
         #[arg(long = "to-group", value_name = "GROUP")]
         group: String,
 
-        /// Report what would move, and change nothing.
+        /// Report what moving targets, and change nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -252,7 +252,7 @@ pub enum Command {
         #[arg(long)]
         uninstall: bool,
 
-        /// Report every path that would change, and change nothing.
+        /// Report every path that installing targets, and change nothing.
         #[arg(long, requires = "action")]
         dry_run: bool,
     },
@@ -281,23 +281,23 @@ pub enum AuthCommand {
 /// Anything that stops a command from producing an answer.
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
-    /// Configuration could not be loaded.
+    /// Configuration was not loaded.
     #[error(transparent)]
     Config(#[from] config::ConfigError),
 
-    /// No token could be found.
+    /// No token was found.
     #[error(transparent)]
     Auth(#[from] auth::NoTokenError),
 
-    /// The provider could not be reached.
+    /// The provider was not reached.
     #[error(transparent)]
     GitHub(#[from] crate::github::GitHubError),
 
-    /// A configured root could not be resolved.
+    /// A configured root was not resolved.
     #[error(transparent)]
     Roots(#[from] config::UnresolvedRootError),
 
-    /// The cache could not be written.
+    /// The cache was not written.
     #[error(transparent)]
     Cache(#[from] crate::cache::CacheError),
 
@@ -305,10 +305,10 @@ pub enum CliError {
     #[error(transparent)]
     Validation(#[from] config::ValidationError),
 
-    /// The terminal could not be driven.
+    /// The terminal was not driven.
     ///
     /// The cause is not interpolated here, because the caller prints the whole
-    /// chain and would otherwise show it twice.
+    /// chain and otherwise shows it twice.
     #[error("cannot run the interactive browser")]
     Terminal {
         /// What went wrong.
@@ -316,11 +316,11 @@ pub enum CliError {
         source: std::io::Error,
     },
 
-    /// A completion script could not be printed or installed.
+    /// A completion script was not printed or installed.
     #[error(transparent)]
     Completions(#[from] completions::CompletionsError),
 
-    /// A repository could not be moved.
+    /// A repository was not moved.
     #[error(transparent)]
     Move(#[from] actions::MoveError),
 
@@ -332,7 +332,7 @@ pub enum CliError {
     #[error(transparent)]
     Narrowing(#[from] narrowing::InapplicableNarrowingError),
 
-    /// Output could not be rendered.
+    /// Output was not rendered.
     #[error("cannot render JSON output: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -340,7 +340,7 @@ pub enum CliError {
 /// What a command produced, and whether any repository failed.
 ///
 /// The two are separate because a batch that reports several failures still
-/// produces output worth printing; the failures decide the exit code, not
+/// produces output worth printing. The failures decide the exit code, not
 /// whether anything is shown.
 #[derive(Debug)]
 pub struct Output {
@@ -982,7 +982,7 @@ fn refresh(as_json: bool) -> Result<String, CliError> {
 /// Prints a completion script, installs one, or removes one.
 ///
 /// Printing is the default because it composes: a redirect, a pipe into
-/// `Invoke-Expression`, or a look at what would be written all start here. The
+/// `Invoke-Expression`, or a look at what gets written all start here. The
 /// instructions go to standard error so that a redirect captures the script
 /// alone and still leaves them on the terminal.
 fn completion_command(
@@ -1019,7 +1019,7 @@ fn completion_command(
 
 /// Whether each completion script on disk still matches the command surface.
 ///
-/// The comparison is the whole script, byte for byte, against what would be
+/// The comparison is the whole script, byte for byte, against what is
 /// generated now. That needs no version recorded anywhere and cannot be fooled
 /// by a release that changed a flag without changing a version the script
 /// carries.
@@ -1082,7 +1082,7 @@ struct Gathered {
 /// The accounts to enumerate, each login once regardless of case or of being
 /// listed under both `users` and `orgs`.
 ///
-/// A login that appears twice would otherwise fetch and clone the same
+/// A login that appears twice otherwise fetches and clones the same
 /// repositories twice, doubling the report and racing two clones into one path.
 fn accounts_of(github: &config::GitHub) -> Vec<Account> {
     let mut seen = std::collections::HashSet::new();
@@ -1301,7 +1301,7 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
     Ok(out)
 }
 
-/// Appends the roots a scan could not read, and the paths it deliberately
+/// Appends the roots a scan did not read, and the paths it deliberately
 /// skipped, to a command's text output, so they are never inferred from a
 /// short or empty result.
 fn append_scan_notes(out: &mut String, scanned: &scan::Scan) {
@@ -1312,7 +1312,7 @@ fn append_scan_notes(out: &mut String, scanned: &scan::Scan) {
     for link in &scanned.skipped_symlinks {
         let _ = write!(
             out,
-            "\nNot following the symlink {}; move the clones out from behind it, or point a root at its target.",
+            "\nNot following the symlink {}. Move the clones out from behind it, or point a root at its target.",
             link.display()
         );
     }
@@ -1326,7 +1326,7 @@ fn append_scan_notes(out: &mut String, scanned: &scan::Scan) {
     }
 }
 
-/// Where new clones should land.
+/// Where new clones land.
 ///
 /// A named directory is taken as given, since `--into` is the way to say where
 /// outright. A named group is the directory it already occupies somewhere

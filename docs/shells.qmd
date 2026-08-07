@@ -12,7 +12,7 @@ subtitle: "Where each completion script is installed, and how to do it by hand."
 
 Re-running replaces that block.
 `--uninstall` removes it, and nothing else.
-`--dry-run` reports every path either would touch, and touches none of them.
+`--dry-run` reports every path either touches, and touches none of them.
 
 Leave the shell out and it is taken from `$SHELL`:
 
@@ -23,7 +23,7 @@ minato completions --install
 ## An install already in place stays where it is
 
 Each table below says where a *first* install goes.
-Once a script is on disk, that is the file `--install` updates, even when the machine has since gained Oh My Zsh, Homebrew, or bash-completion and a first install would now choose somewhere else.
+Once a script is on disk, that is the file `--install` updates, even when the machine has since gained Oh My Zsh, Homebrew, or bash-completion and a first install now chooses somewhere else.
 Copies in the other locations it knows about are removed on the way, so nothing is left behind to shadow the file that is kept.
 
 To move an install, remove it and install again:
@@ -67,7 +67,7 @@ Homebrew's own shell setup puts `$HOMEBREW_PREFIX/share/zsh/site-functions` on `
 It is used only when that directory already exists and you can write to it, and never with `sudo`.
 
 Otherwise the file goes to `~/.zfunc`, and the managed block adds that directory to `fpath` and calls `compinit -i`.
-It has to be `-i` rather than `-C`: `-C` omits the check for new completion functions and reuses the existing dump, and by the time the block runs your own `compinit` has usually written one, which would leave `_minato` unseen.
+It has to be `-i` rather than `-C`: `-C` omits the check for new completion functions and reuses the existing dump, and by the time the block runs your own `compinit` has usually written one, which leaves `_minato` unseen.
 
 Alongside those three, `$XDG_DATA_HOME/zsh/site-functions/_minato` is found and cleaned up, since an earlier version of these instructions pointed there.
 
@@ -142,5 +142,5 @@ A completion script is a copy of the command surface from the moment it was gene
 minato doctor
 ```
 
-The `completions` check compares every script it finds, byte for byte, against what this binary would generate now, and names the command to run for each one that has drifted.
+The `completions` check compares every script it finds, byte for byte, against what this binary generates now, and names the command to run for each one that has drifted.
 A shell you have not set up is never mentioned.

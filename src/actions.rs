@@ -287,14 +287,14 @@ pub fn update_all(comparisons: &[Comparison], mode: Mode) -> Summary {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum MoveError {
     /// No repository matched what was asked for.
-    #[error("no repository matches `{wanted}`; run `minato status` to see what there is")]
+    #[error("no repository matches `{wanted}`. Run `minato status` to see what there is")]
     NoMatch {
         /// What was asked for.
         wanted: String,
     },
 
     /// More than one repository matched, so the choice would be a guess.
-    #[error("`{wanted}` matches {count} repositories; name one of them exactly: {matches}")]
+    #[error("`{wanted}` matches {count} repositories. Name one of them exactly: {matches}")]
     Ambiguous {
         /// What was asked for.
         wanted: String,
@@ -305,7 +305,7 @@ pub enum MoveError {
     },
 
     /// The repository has no local clone to move.
-    #[error("`{wanted}` has no local clone to move; clone it first")]
+    #[error("`{wanted}` has no local clone to move. Clone it first")]
     NotCloned {
         /// What was asked for.
         wanted: String,
@@ -322,7 +322,7 @@ pub enum MoveError {
     },
 
     /// Something already occupies the destination.
-    #[error("`{}` already exists; nothing was moved", destination.display())]
+    #[error("`{}` already exists. Nothing was moved", destination.display())]
     DestinationExists {
         /// Where it would have gone.
         destination: PathBuf,
@@ -359,7 +359,7 @@ pub enum MoveError {
 /// a new clone in a group has the same rule and deserves the same words.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
-    "`{group}` is not a valid group; a group is a directory path beneath a root, written with `/`, so no part of it can be empty, `.` or `..`, and it cannot contain `\\`"
+    "`{group}` is not a valid group. A group is a directory path beneath a root, written with `/`, so no part of it can be empty, `.` or `..`, and it cannot contain `\\`"
 )]
 pub struct InvalidGroupError {
     /// The offending group.

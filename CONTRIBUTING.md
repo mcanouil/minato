@@ -38,7 +38,7 @@ Version 0.76 starts the container and then never returns, which looks like a han
 Version 0.87 completes in seconds.
 
 Authentication is not inherited.
-`gh` on macOS keeps its token in the keychain, which cannot be bind-mounted, so mounting its configuration directory would only produce a broken login.
+`gh` on macOS keeps its token in the keychain, which cannot be bind-mounted, so mounting its configuration directory only produces a broken login.
 Export a token on the host before starting the container instead, which the network tests and any real run inside will pick up.
 
 ```sh
@@ -51,7 +51,7 @@ The integration tests, and any manual run inside, use disposable git repositorie
 The read-only guarantee lives where the design note puts it, in the action layer: an update is only ever a fast-forward, and `--dry-run` rehearses first.
 
 CI runs these same three commands, with tests on Linux, macOS, and Windows.
-Lint levels live in `Cargo.toml` under `[lints]`, so a local run and a CI run agree; there are no extra lint flags in the workflow.
+Lint levels live in `Cargo.toml` under `[lints]`, so a local run and a CI run agree. There are no extra lint flags in the workflow.
 
 ## Commit conventions
 

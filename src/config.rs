@@ -139,19 +139,19 @@ fn default_ttl() -> SignedDuration {
 pub enum ValidationError {
     /// No provider has any account configured.
     #[error(
-        "no provider is configured, so there is nothing to compare against; add at least one account, for example:\n\n[providers.github]\nusers = [\"your-username\"]"
+        "no provider is configured, so there is nothing to compare against. Add at least one account, for example:\n\n[providers.github]\nusers = [\"your-username\"]"
     )]
     NoProviders,
 
     /// No local root was given, so no clone could ever be found.
     #[error(
-        "`local.roots` is empty, so no local clone can be found; add at least one directory, for example:\n\n[local]\nroots = [\"~/Projects\"]"
+        "`local.roots` is empty, so no local clone can be found. Add at least one directory, for example:\n\n[local]\nroots = [\"~/Projects\"]"
     )]
     NoRoots,
 
     /// The layout would place every repository at the same path.
     #[error(
-        "`local.layout` must contain `{{repo}}` so that each repository gets its own directory; got `{layout}`"
+        "`local.layout` must contain `{{repo}}` so that each repository gets its own directory. Got `{layout}`"
     )]
     LayoutMissingRepo {
         /// The offending layout.
@@ -160,7 +160,7 @@ pub enum ValidationError {
 
     /// The layout used a placeholder Minato does not substitute.
     #[error(
-        "`local.layout` uses `{{{placeholder}}}`, which is not a placeholder Minato knows; use any of {}",
+        "`local.layout` uses `{{{placeholder}}}`, which is not a placeholder Minato knows. Use any of {}",
         known_placeholders()
     )]
     LayoutUnknownPlaceholder {
@@ -169,7 +169,7 @@ pub enum ValidationError {
     },
 
     /// The cache lifetime was written as a negative duration.
-    #[error("`cache.ttl` must not be negative; got {ttl}")]
+    #[error("`cache.ttl` must not be negative. Got {ttl}")]
     NegativeCacheTtl {
         /// The offending duration.
         ttl: SignedDuration,
@@ -187,7 +187,7 @@ fn known_placeholders() -> String {
 /// A root that cannot be expanded because no home directory is known.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
-    "cannot expand `~` in `{}` because no home directory is set; write an absolute path in `local.roots`, or set HOME",
+    "cannot expand `~` in `{}` because no home directory is set. Write an absolute path in `local.roots`, or set HOME",
     root.display()
 )]
 pub struct UnresolvedRootError {
@@ -239,7 +239,7 @@ pub enum ConfigError {
 
     /// The configuration location could not be determined at all.
     #[error(
-        "cannot determine where the configuration lives, because neither {CONFIG_ENV}, XDG_CONFIG_HOME, nor a home directory is set; set {CONFIG_ENV} to the path of your configuration file"
+        "cannot determine where the configuration lives, because neither {CONFIG_ENV}, XDG_CONFIG_HOME, nor a home directory is set. Set {CONFIG_ENV} to the path of your configuration file"
     )]
     NoLocation,
 }

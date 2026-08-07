@@ -23,7 +23,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://m.canouil.dev/minato/install.
 
 Either script detects your platform, verifies the download against the release `SHA256SUMS`, and puts the binary somewhere you can run it: `/usr/local/bin` when writable and otherwise `~/.local/bin`, or `%LOCALAPPDATA%\Programs\minato` on Windows, which it adds to your user `PATH` when it is not already there.
 Set `MINATO_VERSION` to pin a release, `MINATO_INSTALL_DIR` to choose where it lands, or `MINATO_SKIP_CHECKSUM=1` to bypass verification.
-The shell script needs `bash` and `curl`; the PowerShell one runs on Windows PowerShell 5.1 as well as PowerShell 7, and takes `MINATO_NO_MODIFY_PATH=1` to leave `PATH` alone.
+The shell script needs `bash` and `curl`. The PowerShell one runs on Windows PowerShell 5.1 as well as PowerShell 7, and takes `MINATO_NO_MODIFY_PATH=1` to leave `PATH` alone.
 
 ### With cargo
 
@@ -77,7 +77,7 @@ minato completions --install
 ```
 
 That writes the script where the shell reads it, taking the shell from `$SHELL` unless you name one, and edits your shell's configuration only where the file alone is not enough.
-`--dry-run` reports every path it would touch first, and `--uninstall` removes what it wrote.
+`--dry-run` reports every path it touches first, and `--uninstall` removes what it wrote.
 
 Open a new shell, then `minato <Tab>` lists the commands and `minato clone --<Tab>` lists that command's flags.
 
@@ -156,7 +156,7 @@ ok  completions    current: /Users/you/.zfunc/_minato
 ```
 
 A completion script is a copy of the command surface taken when it was generated, so an upgrade that adds a command leaves it offering the old one.
-`doctor` compares each script it finds against what the binary would generate now, and prints the command to rewrite any that has fallen behind.
+`doctor` compares each script it finds against what the binary generates now, and prints the command to rewrite any that has fallen behind.
 
 ```{.default filename="Output"}
 !!  completions    1 of 2 found out of date

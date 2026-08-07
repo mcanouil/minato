@@ -61,7 +61,7 @@ impl fmt::Display for TokenSource {
 /// No token could be found anywhere `minato` looks.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
-    "no GitHub token found; run `gh auth login` to sign in with the gh CLI, or set {} to a personal access token with the `repo` scope",
+    "no GitHub token found. Run `gh auth login` to sign in with the gh CLI, or set {} to a personal access token with the `repo` scope",
     TOKEN_VARIABLES[0]
 )]
 pub struct NoTokenError;

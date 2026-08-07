@@ -38,7 +38,7 @@ pub enum CompletionsError {
 
     /// `$SHELL` named nothing, or named something with no convention here.
     #[error(
-        "cannot tell which shell to use from $SHELL{}; name one, as in `minato completions zsh`",
+        "cannot tell which shell to use from $SHELL{}. Name one, as in `minato completions zsh`",
         .found.as_ref().map_or_else(String::new, |found| format!(" ({found})"))
     )]
     UnknownShell {
@@ -57,7 +57,7 @@ pub enum CompletionsError {
         hint: String,
     },
 
-    /// A file could not be written or removed.
+    /// A file was not written or removed.
     #[error("cannot write {}", path.display())]
     Io {
         /// The file in question.
@@ -137,8 +137,8 @@ fn directory_from(variable: &str, home: &Path, fallback: &str) -> PathBuf {
 ///
 /// `$ZSH` and `$ZSH_CUSTOM` are exported by Oh My Zsh's stock configuration, so
 /// they survive into any process it starts. They are followed only when they
-/// point inside the home directory: a run with a different `$HOME` would
-/// otherwise write into, and on uninstall delete from, a home nobody named.
+/// point inside the home directory: a run with a different `$HOME` otherwise
+/// writes into, and on uninstall deletes from, a home nobody named.
 fn oh_my_zsh_from_env(home: &Path) -> PathBuf {
     std::env::var_os("ZSH_CUSTOM")
         .map(PathBuf::from)
@@ -199,7 +199,7 @@ pub struct Location {
     ///
     /// Somewhere an older version, or an older set of instructions, put the
     /// script. A file found there is swept so it cannot shadow the one being
-    /// maintained, and it is never chosen: choosing it would keep an install
+    /// maintained, and it is never chosen: choosing it keeps an install
     /// on the very layout this is meant to move it off.
     pub sweep_only: bool,
 }
@@ -209,7 +209,7 @@ pub struct Location {
 ///
 /// Two jobs. An install takes the first that already holds a file, so a
 /// location chosen deliberately is not moved by installing Oh My Zsh or
-/// Homebrew afterwards; and every other one is swept, so no copy is left for
+/// Homebrew afterwards. Every other one is swept, so no copy is left for
 /// nothing to keep up to date.
 ///
 /// PowerShell contributes none, being evaluated from `$PROFILE` rather than
@@ -390,7 +390,7 @@ fn is_writable(directory: &Path) -> bool {
     }
 }
 
-/// What an install would do.
+/// What an install does.
 #[derive(Debug)]
 pub struct Plan {
     /// Where the script goes, and what that place needs.
@@ -406,7 +406,7 @@ pub struct Plan {
     pub stale_rc: Option<PathBuf>,
 }
 
-/// What installing for `shell` would do.
+/// What installing for `shell` does.
 ///
 /// # Errors
 ///
@@ -519,7 +519,7 @@ pub fn install(plan: &Plan, script: &str) -> Result<String, CompletionsError> {
     Ok(report.trim_end().to_owned())
 }
 
-/// Says what [`install`] would do, and does nothing.
+/// Says what [`install`] does, without doing it.
 #[must_use]
 pub fn describe(plan: &Plan) -> String {
     let mut report = String::new();
@@ -619,7 +619,7 @@ pub fn uninstall(
 /// # Errors
 ///
 /// Returns [`CompletionsError::UnknownShell`] when `$SHELL` is unset or names a
-/// shell with no convention here, since guessing would install a script the
+/// shell with no convention here, since guessing installs a script the
 /// shell in use never reads.
 pub fn shell_from_env() -> Result<Shell, CompletionsError> {
     let found = std::env::var("SHELL")
@@ -644,7 +644,7 @@ pub fn shell_from_env() -> Result<Shell, CompletionsError> {
 /// The completion script for `shell`.
 ///
 /// Generated from the surface a run is actually offered, narrowing included, so
-/// a script never completes a flag its command would refuse. The name is the
+/// a script never completes a flag its command refuses. The name is the
 /// one the command carries rather than the one it was invoked by, so a script
 /// written from `target/debug/minato`, or from a renamed copy, still completes
 /// the installed name.

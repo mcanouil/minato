@@ -28,7 +28,7 @@ A clone is matched to a repository by its remote URL rather than by where it sit
 
 ### Groups
 
-A group is simply a directory beneath a root, so `~/Projects/demo/some-repo` is in the `demo` group with nothing to configure.
+A group is a directory beneath a root, so `~/Projects/demo/some-repo` is in the `demo` group with nothing to configure.
 The tree is the source of truth, and the relationship runs both ways: `--group demo` selects what is already there, and `minato clone --into-group demo` puts new clones where that group already lives.
 
 Groups nest as the tree does: `~/Projects/perso/apps/minato` is in `perso/apps`, a group whose parent is `perso`.
@@ -37,15 +37,16 @@ Matching runs from the root down, one directory at a time, so `--group apps` doe
 
 Moving between groups moves the directory: `minato move imdb-ratings --to-group demo`, or `--to-group perso/apps` for a nested one.
 A clone does not care where it sits, so this is a plain rename, but it is still a change to your filesystem.
-It is therefore one repository at a time, never a side effect of another command, refuses anything it would have to overwrite, and refuses an ambiguous name rather than guessing which repository you meant.
+It is therefore one repository at a time, never a side effect of another command, refuses anything it cannot overwrite, and refuses an ambiguous name rather than guessing which repository you meant.
 The directory keeps its own name, which is not always the repository name.
 
 `--group` and `--into-group` are deliberately different.
-The first selects by where a clone already sits; the second says where a new one should go.
-A repository that has not been cloned is in no group, so filtering `clone` by one would match nothing.
+The first selects by where a clone already sits. The second says where a new one must go.
+A repository that has not been cloned is in no group, so filtering `clone` by one matches nothing.
 
 `layout` only decides the name of a _new_ clone beneath the directory it is placed in.
 It defaults to a flat name, because where a repository belongs is a judgement its identity does not carry.
+
 Use `minato clone --into <directory>` to say where.
 
 A token is never stored here.
@@ -85,14 +86,14 @@ A command asked to narrow by a condition it cannot act on says so and stops, rat
 | `/`             | Search by repository, group, or path. `Enter` keeps it, `Esc` clears it.                                            |
 | `s`             | Cycle the ordering: name, state, group. Sorting by state puts what needs attention first.                           |
 | `f` `u`         | Fetch or update the highlighted repository.                                                                         |
-| `r`             | Rescan the disk. It does not refetch, since a keystroke should not spend your rate limit; use `--refresh` for that. |
+| `r`             | Rescan the disk. It does not refetch, since a keystroke must not spend your rate limit. Use `--refresh` for that. |
 | `q`             | Leave.                                                                                                              |
 
 Every action it offers calls the same function the matching command calls, so nothing can be done here that cannot be scripted.
 It needs a terminal, and says so plainly when there is not one rather than failing obscurely.
 
-`clone`, `fetch`, and `update` all take `--dry-run`, which reports what would happen and changes nothing.
-One repository failing does not stop the others; every repository is reported and the process exits non-zero if any of them failed.
+`clone`, `fetch`, and `update` all take `--dry-run`, which reports what happens and changes nothing.
+One repository failing does not stop the others. Every repository is reported and the process exits non-zero if any of them failed.
 
 Nothing force-pushes, rebases, or discards a change.
 An update is only ever a fast-forward, so if the situation has been misjudged, git refuses rather than improvising.
@@ -178,7 +179,7 @@ cargo install --path .
 
 ### In a devcontainer
 
-No host toolchain is needed beyond Docker; see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full setup.
+No host toolchain is needed beyond Docker. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full setup.
 
 ```sh
 devcontainer up --workspace-folder .

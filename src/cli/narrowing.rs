@@ -71,7 +71,7 @@ const ACTS_ON_EVERY: &str = "it acts on every condition.";
 const WORKS_REMOTELY: &str = "it works from what the provider reports and never scans local clones, so a local condition has nothing to match. `minato status` compares the two and takes it.";
 
 /// Shown by `move`, which is told which repository to act on.
-const NAMES_ITS_SUBJECT: &str = "it acts on the one repository you name, so there is nothing to narrow; `--to-group` says where it should land.";
+const NAMES_ITS_SUBJECT: &str = "it acts on the one repository you name, so there is nothing to narrow. `--to-group` says where it lands.";
 
 /// Shown by a command that acts on no repository at all.
 const TOUCHES_NOTHING: &str = "it acts on no repository, so there is nothing to narrow.";
@@ -156,7 +156,7 @@ fn hide_at(command: clap::Command, path: &[&str], refused: &[Narrowing]) -> clap
 /// Hides, on each command, the narrowing arguments it cannot act on.
 ///
 /// Help then lists only what a command will accept, and the generated
-/// completion scripts stop offering flags that would be refused. Naming one
+/// completion scripts stop offering flags that are refused. Naming one
 /// anyway still reaches `check`, so the refusal remains an explanation rather
 /// than clap's "unexpected argument": hidden is not the same as absent.
 pub fn hide_inapplicable(command: clap::Command) -> clap::Command {

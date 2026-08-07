@@ -162,7 +162,7 @@ impl From<GitHubError> for PageFailure {
 pub enum GitHubError {
     /// The token was rejected.
     #[error(
-        "GitHub rejected the token{}; check it has not expired and carries the `repo` scope, or run `gh auth login` again",
+        "GitHub rejected the token{}. Check it has not expired and carries the `repo` scope, or run `gh auth login` again",
         source_note(*token_source)
     )]
     Unauthorised {
@@ -172,7 +172,7 @@ pub enum GitHubError {
 
     /// The rate limit was hit and did not clear within the retry budget.
     #[error(
-        "GitHub rate limit reached while listing repositories for `{account}`{}; wait and run the command again, or use a token with a higher limit",
+        "GitHub rate limit reached while listing repositories for `{account}`{}. Wait and run the command again, or use a token with a higher limit",
         reset_note(*reset)
     )]
     RateLimited {
@@ -184,7 +184,7 @@ pub enum GitHubError {
 
     /// The same page cursor came back twice, so following it would not advance.
     #[error(
-        "GitHub returned the same page cursor twice while listing repositories for `{account}`, so paging would not finish; this usually means a partial outage, so run the command again"
+        "GitHub returned the same page cursor twice while listing repositories for `{account}`, so paging cannot finish. This usually means a partial outage. Run the command again"
     )]
     StalledPagination {
         /// The account being listed.
@@ -193,7 +193,7 @@ pub enum GitHubError {
 
     /// No such user or organisation exists, or it is not visible.
     #[error(
-        "GitHub has no visible user or organisation called `{account}`; check the spelling in `providers.github`, and that the token can see it if it is private"
+        "GitHub has no visible user or organisation called `{account}`. Check the spelling in `providers.github`, and that the token can see it if it is private"
     )]
     UnknownAccount {
         /// The account that could not be resolved.
@@ -211,7 +211,7 @@ pub enum GitHubError {
 
     /// GitHub answered with a status that means nothing `minato` expects.
     #[error(
-        "GitHub returned {status} while listing repositories for `{account}`; if this persists, check https://www.githubstatus.com"
+        "GitHub returned {status} while listing repositories for `{account}`. If this persists, check https://www.githubstatus.com"
     )]
     Unexpected {
         /// The account being listed.
@@ -244,7 +244,7 @@ pub enum GitHubError {
 
     /// GitHub could not be reached after the retry budget was spent.
     #[error(
-        "cannot reach GitHub while listing repositories for `{account}` after retrying; check your connection and try again"
+        "cannot reach GitHub while listing repositories for `{account}` after retrying. Check your connection and try again"
     )]
     Unreachable {
         /// The account being listed.

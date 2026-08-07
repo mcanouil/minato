@@ -20,7 +20,7 @@ Ahead and behind counts are read from remote-tracking refs with `git rev-list --
 
 ## Provider abstraction
 
-The data model is provider-agnostic from the first commit: a repository is identified by `RepoId { provider, owner, name }`, and the metadata structure carries only fields that any provider could reasonably supply.
+The data model is provider-agnostic from the first commit: a repository is identified by `RepoId { provider, owner, name }`, and the metadata structure carries only fields that any provider can reasonably supply.
 
 The `Provider` trait itself is deliberately **not** extracted yet.
 GitHub is implemented concretely behind a module boundary, because a trait designed against a single implementation encodes that implementation's assumptions.
@@ -40,7 +40,7 @@ Rate limiting is handled by honouring the reset and retry headers with exponenti
 
 ## Comparison state machine
 
-The framing behind comparison is that local clones are a backup of remote state: what a provider hosts should also exist on disk, and comparison reports where the two have fallen out of step.
+The framing behind comparison is that local clones are a backup of remote state: what a provider hosts must also exist on disk, and comparison reports where the two have fallen out of step.
 That is why `RemoteOnly` matters at all, and why bulk clone exists: a hosted repository with no clone is not backed up locally.
 
 Comparison is a pure function.
@@ -67,8 +67,8 @@ They are split by where they come from, and are absent rather than false when th
 - From the provider: `archived`, `private`, and `fork`.
 
 `dirty` and `untracked` are deliberately separate.
-An untracked file is usually a build artefact, and git fast-forwards happily alongside one, refusing by itself in the single case where the incoming commit would overwrite it.
-Treating the two alike would mark a repository unupdatable for as long as a stray log file sat in it.
+An untracked file is usually a build artefact, and git fast-forwards happily alongside one, refusing by itself in the single case where the incoming commit overwrites it.
+Treating the two alike marks a repository unupdatable for as long as a stray log file sits in it.
 
 `LocalOnly` is subdivided by cause, since the remedies differ: the clone has no remote at all, its remote points at a host Minato does not support, its owner is not configured so the provider was never asked, or the owner is configured and the provider did not report it.
 That last case covers deletion, renaming, and a repository turning private.
@@ -87,7 +87,7 @@ Failure to compare is not fatal: a listing that is otherwise complete is worth m
 ## Sync safety
 
 The safety rules live in the comparison layer, not in the actions.
-Actions ask whether an operation is permitted; they do not decide it.
+Actions ask whether an operation is permitted. They do not decide it.
 
 A fast-forward is offered only when a repository is `Behind`, not `dirty`, and not `detached_head`.
 Every other combination is reported with its reason rather than skipped silently, because a repository that cannot be updated is exactly the one the user needs to know about.
@@ -99,7 +99,7 @@ The following never happen implicitly, under any command:
 - Discarding or stashing local changes.
 
 Bulk actions are failure-isolated.
-One repository failing does not abort the batch; each result is captured, a summary is printed, and the process exits non-zero if any repository failed.
+One repository failing does not abort the batch. Each result is captured, a summary is printed, and the process exits non-zero if any repository failed.
 
 ## Cache
 

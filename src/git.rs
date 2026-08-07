@@ -12,7 +12,7 @@ use std::process::Command;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum GitError {
     /// The `git` binary could not be run at all.
-    #[error("cannot run `git`: {message}; check that git is installed and on PATH")]
+    #[error("cannot run `git`: {message}. Check that git is installed and on PATH")]
     Unavailable {
         /// What the operating system reported.
         message: String,
