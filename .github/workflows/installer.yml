@@ -9,6 +9,7 @@ on:
       - "docs/install.ps1"
       - ".github/workflows/installer.yml"
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "docs/install.ps1"
       - ".github/workflows/installer.yml"
@@ -26,6 +27,8 @@ jobs:
   lint:
     name: Lint the PowerShell installer
     runs-on: windows-latest
+    if: ${{ github.event.pull_request.draft != true }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -50,6 +53,8 @@ jobs:
   smoke:
     name: Install with ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    if: ${{ github.event.pull_request.draft != true }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       # pwsh is PowerShell 7; powershell is Windows PowerShell 5.1, which is what
@@ -97,6 +102,8 @@ jobs:
   path:
     name: Add to PATH
     runs-on: windows-latest
+    if: ${{ github.event.pull_request.draft != true }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 

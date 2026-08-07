@@ -4,6 +4,7 @@ name: Documentation check
 # checks that a change still renders, before it reaches main.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     # CHANGELOG.md is part of the site through docs/changelog.qmd.
     paths: ["docs/**", "CHANGELOG.md", ".github/workflows/docs.yml"]
 
@@ -18,6 +19,8 @@ jobs:
   build:
     name: Render website
     runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.draft != true }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
