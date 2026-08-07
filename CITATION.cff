@@ -6,5 +6,5 @@ authors:
   - name: "Mickaël Canouil"
 repository-code: "https://github.com/mcanouil/minato"
 license: MIT
-version: 0.4.0
-date-released: "2026-08-04"
+version: 0.4.1
+date-released: "2026-08-07"
