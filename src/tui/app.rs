@@ -14,7 +14,8 @@ pub enum Sort {
     Name,
     /// By state, so what needs attention rises to the top.
     State,
-    /// By group, keeping a category together, with the ungrouped last.
+    /// By group, then by path as the command line does, with the ungrouped
+    /// last.
     Group,
 }
 
@@ -282,6 +283,7 @@ impl App {
                     .cmp(&urgency(&right.state))
                     .then_with(|| name_of(left).cmp(&name_of(right))),
                 Sort::Group => absent_last(left.group.as_ref(), right.group.as_ref())
+                    .then_with(|| absent_last(left.path.as_ref(), right.path.as_ref()))
                     .then_with(|| name_of(left).cmp(&name_of(right))),
             }
         });
