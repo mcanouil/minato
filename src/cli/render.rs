@@ -67,19 +67,18 @@ impl std::fmt::Display for Table {
 }
 
 fn write_row(out: &mut String, cells: &[String], widths: &[usize]) {
-    let last = widths.len().saturating_sub(1);
+    let mut line = String::new();
 
     for (column, width) in widths.iter().enumerate() {
         let cell = cells.get(column).map_or("", String::as_str);
+        let padding = width.saturating_sub(cell.chars().count());
 
-        // The final column is not padded, so lines carry no trailing spaces.
-        if column == last {
-            let _ = writeln!(out, "{cell}");
-        } else {
-            let padding = width.saturating_sub(cell.chars().count());
-            let _ = write!(out, "{cell}{:padding$}  ", "", padding = padding);
-        }
+        let _ = write!(line, "{cell}{:padding$}  ", "", padding = padding);
     }
+
+    // The row is trimmed rather than the final column left unpadded, so a row
+    // whose last cells are empty carries no trailing spaces either.
+    let _ = writeln!(out, "{}", line.trim_end());
 }
 
 /// Describes a duration the way a person would say it.
@@ -136,6 +135,17 @@ mod tests {
         let mut table = Table::new(["ID", "STATE"]);
         table.push(["one", "behind"]);
         table.push(["a-much-longer-one", "ok"]);
+
+        for line in table.to_string().lines() {
+            assert_eq!(line, line.trim_end(), "trailing whitespace in `{line}`");
+        }
+    }
+
+    #[test]
+    fn an_empty_last_cell_leaves_no_trailing_whitespace() {
+        let mut table = Table::new(["ID", "STATE", "NOTES"]);
+        table.push(["one", "in sync", ""]);
+        table.push(["a-much-longer-one", "behind", "dirty"]);
 
         for line in table.to_string().lines() {
             assert_eq!(line, line.trim_end(), "trailing whitespace in `{line}`");

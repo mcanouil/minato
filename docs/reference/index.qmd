@@ -69,9 +69,9 @@ minato status --state behind --state diverged
 ```
 
 ```{.default filename="Output"}
-REPOSITORY                     GROUP   STATE       NOTES                     PATH
-github:mcanouil/imdb-ratings   perso   behind 2                              /Users/you/Projects/perso/imdb-ratings
-github:mcanouil/pandoc         forks   in sync     fork, 429 behind upstream /Users/you/Projects/forks/pandoc
+PATH                                    REPOSITORY                    GROUP  STATE     NOTES
+/Users/you/Projects/forks/pandoc        github:mcanouil/pandoc        forks  in sync   fork, 429 behind upstream
+/Users/you/Projects/perso/imdb-ratings  github:mcanouil/imdb-ratings  perso  behind 2
 ```
 
 ### `minato doctor`

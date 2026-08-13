@@ -258,6 +258,12 @@ fn draw(frame: &mut Frame, app: &App) {
             Row::new(vec![
                 Cell::from(
                     comparison
+                        .path
+                        .as_ref()
+                        .map_or_else(|| "-".to_owned(), |path| path.display().to_string()),
+                ),
+                Cell::from(
+                    comparison
                         .id
                         .as_ref()
                         .map_or_else(|| "-".to_owned(), ToString::to_string),
@@ -272,14 +278,18 @@ fn draw(frame: &mut Frame, app: &App) {
     let table = Table::new(
         rows,
         [
-            Constraint::Percentage(45),
-            Constraint::Percentage(15),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
+            // The last three columns hold bounded text, so they are given the
+            // width their longest common value needs and the two that identify
+            // a row share everything left.
+            Constraint::Fill(1),
+            Constraint::Fill(1),
+            Constraint::Length(10),
+            Constraint::Length(15),
+            Constraint::Length(14),
         ],
     )
     .header(
-        Row::new(["REPOSITORY", "GROUP", "STATE", "NOTES"])
+        Row::new(["PATH", "REPOSITORY", "GROUP", "STATE", "NOTES"])
             .style(Style::default().add_modifier(Modifier::BOLD)),
     )
     .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED))
@@ -431,8 +441,14 @@ mod rendering {
 
     /// Renders once and returns everything on screen as text.
     fn screen(app: &App) -> String {
+        screen_of_width(app, 100)
+    }
+
+    /// Renders into a terminal of a chosen width, since what the columns can
+    /// still show depends on it.
+    fn screen_of_width(app: &App, width: u16) -> String {
         let mut terminal =
-            Terminal::new(TestBackend::new(100, 12)).expect("a terminal to render into");
+            Terminal::new(TestBackend::new(width, 12)).expect("a terminal to render into");
 
         terminal
             .draw(|frame| draw(frame, app))
@@ -442,7 +458,7 @@ mod rendering {
             .backend()
             .buffer()
             .content()
-            .chunks(100)
+            .chunks(width as usize)
             .map(|line| {
                 line.iter()
                     .map(ratatui::buffer::Cell::symbol)
@@ -461,6 +477,37 @@ mod rendering {
         assert!(rendered.contains("not backed up"), "{rendered}");
         assert!(rendered.contains("perso"), "{rendered}");
         assert!(rendered.contains("dirty"), "{rendered}");
+    }
+
+    #[test]
+    fn the_columns_lead_with_the_path_like_the_command_line_does() {
+        let rendered = screen(&App::new(rows()));
+
+        let header = rendered
+            .lines()
+            .find(|line| line.contains("REPOSITORY"))
+            .expect("a header line");
+
+        assert_eq!(
+            header.split_whitespace().collect::<Vec<_>>(),
+            ["PATH", "REPOSITORY", "GROUP", "STATE", "NOTES"]
+        );
+
+        assert!(
+            rendered.contains("/code/perso/minato"),
+            "a clone shows where it sits: {rendered}"
+        );
+    }
+
+    #[test]
+    fn a_narrow_terminal_still_reads_the_state_whole() {
+        let rendered = screen_of_width(&App::new(rows()), 80);
+
+        assert!(
+            rendered.contains("not backed up"),
+            "the longest state a row commonly carries should not be clipped at 80 columns:\n{rendered}"
+        );
+        assert!(rendered.contains("behind 3"), "{rendered}");
     }
 
     #[test]

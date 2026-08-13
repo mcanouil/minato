@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Features
+
+- feat: lead the `minato status` table with `PATH`, followed by `REPOSITORY`, `GROUP`, `STATE`, and `NOTES`, and order rows by group, then by path, so clones sharing a directory read together. Repositories with no clone, and clones sitting directly in a root, come last rather than first. The ordering is shared, so `--json` and the `fetch` and `update` reports follow it too. The interactive view gains the same leading path column, and ordering it by group with `s` now follows the same group, then path order, leaving the ungrouped rows last as well (#98).
+
 ## 0.4.1 (2026-08-07)
 
 ### Documentation

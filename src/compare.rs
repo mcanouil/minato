@@ -6,6 +6,7 @@
 //! Safety rules live here rather than in the actions. An action asks whether an
 //! operation is permitted; it does not decide it.
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -222,6 +223,11 @@ impl TrackedOwners {
 /// Every reported repository and every clone appears exactly once in the
 /// result, so nothing is silently dropped. Results are sorted, so output does
 /// not depend on the order either side arrived in.
+///
+/// The order is group, then path, then identity, so clones sharing a directory
+/// are neighbours in the output. A missing key sorts last at every level, which
+/// leaves repositories that are not cloned, and clones sitting directly in a
+/// root, at the end rather than ahead of everything that has a group.
 #[must_use]
 pub fn compare(
     remotes: &[RemoteRepo],
@@ -259,14 +265,26 @@ pub fn compare(
     }
 
     comparisons.sort_by(|left, right| {
-        left.id
-            .as_ref()
-            .map(ToString::to_string)
-            .cmp(&right.id.as_ref().map(ToString::to_string))
-            .then_with(|| left.path.cmp(&right.path))
+        absent_last(left.group.as_ref(), right.group.as_ref())
+            .then_with(|| absent_last(left.path.as_ref(), right.path.as_ref()))
+            .then_with(|| absent_last(left.id.as_ref(), right.id.as_ref()))
     });
 
     comparisons
+}
+
+/// Orders two optional keys with the absent value last, the opposite of what
+/// `Option` orders by, so a row missing a key trails the rows that carry one.
+///
+/// Shared with the interactive view, which orders the same fields and has to
+/// agree on where an absent one lands.
+pub(crate) fn absent_last<T: Ord>(left: Option<&T>, right: Option<&T>) -> Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => left.cmp(right),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
 }
 
 /// Judges one clone.
@@ -516,6 +534,52 @@ mod tests {
         assert!(states.contains(&&State::InSync));
         assert!(states.contains(&&State::RemoteOnly));
         assert!(states.contains(&&State::LocalOnly(LocalOnlyReason::MissingRemotely)));
+    }
+
+    #[test]
+    fn rows_are_ordered_by_group_then_path_and_the_ungrouped_come_last() {
+        fn clone_in(group: Option<&str>, name: &str, path: &str) -> LocalRepo {
+            let mut clone = local("mcanouil", name);
+
+            clone.path = PathBuf::from(path);
+            clone.group = group.map(ToOwned::to_owned);
+
+            clone
+        }
+
+        let locals = [
+            clone_in(None, "loose", "/code/loose"),
+            clone_in(Some("perso"), "dotfiles", "/code/perso/dotfiles"),
+            clone_in(Some("apps"), "zebra", "/code/apps/zebra"),
+            clone_in(Some("apps"), "minato", "/code/apps/minato"),
+        ];
+
+        let results = compare(&[remote("mcanouil", "uncloned")], &locals, &tracked());
+
+        let order: Vec<_> = results
+            .iter()
+            .map(|result| {
+                (
+                    result.group.as_deref(),
+                    result
+                        .path
+                        .as_deref()
+                        .map(|path| path.display().to_string()),
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            order,
+            [
+                (Some("apps"), Some("/code/apps/minato".to_owned())),
+                (Some("apps"), Some("/code/apps/zebra".to_owned())),
+                (Some("perso"), Some("/code/perso/dotfiles".to_owned())),
+                (None, Some("/code/loose".to_owned())),
+                (None, None),
+            ],
+            "groups cluster, and a clone in a root outranks a repository with no clone"
+        );
     }
 
     #[test]
