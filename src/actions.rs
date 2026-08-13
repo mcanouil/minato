@@ -571,6 +571,24 @@ pub fn move_to_path(
     })
 }
 
+/// Moves a clone as one of a batch, reporting a refusal rather than raising it.
+///
+/// A command that moves the one repository it was told to move wants the
+/// refusal as an error, since there is nothing else to say. A batch wants it on
+/// the row it belongs to, so that the rest of the batch still runs, which is how
+/// every other action here reports. Both shapes come from the same move, and
+/// the mapping between them lives here rather than with each batch caller.
+#[must_use]
+pub fn relocate(id: Option<RepoId>, from: &Path, to: PathBuf, mode: Mode) -> Report {
+    move_to_path(id.clone(), from, to, mode).unwrap_or_else(|error| Report {
+        id,
+        path: Some(from.to_owned()),
+        outcome: Outcome::Failed {
+            error: error.to_string(),
+        },
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -661,6 +679,29 @@ mod tests {
         assert!(matches!(report.outcome, Outcome::Done { .. }));
         assert!(to.exists(), "the clone is at the place asked for");
         assert!(!from.exists(), "and no longer where it was");
+    }
+
+    #[test]
+    fn a_move_in_a_batch_reports_a_refusal_rather_than_raising_it() {
+        let root = tempfile::tempdir().expect("a temporary root");
+        let from = root.path().join("here");
+        let to = root.path().join("there");
+        std::fs::create_dir(&from).expect("a clone to move");
+        std::fs::create_dir(&to).expect("something to be in the way");
+
+        let report = relocate(None, &from, to, Mode::Execute);
+
+        assert!(
+            matches!(report.outcome, Outcome::Failed { .. }),
+            "a batch reports the refusal on the row it belongs to, got: {:?}",
+            report.outcome
+        );
+        assert_eq!(
+            report.path.as_deref(),
+            Some(from.as_path()),
+            "and says where the clone still is"
+        );
+        assert!(from.exists(), "the clone stays where it was");
     }
 
     #[test]

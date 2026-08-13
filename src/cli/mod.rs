@@ -362,26 +362,6 @@ impl ManifestCommand {
             | Self::Forget { directory, .. } => directory.as_ref(),
         }
     }
-
-    /// The command as it is typed, for a message naming it.
-    const fn typed_as(&self) -> &'static str {
-        match self {
-            Self::Write { .. } => "manifest write",
-            Self::Apply { .. } => "manifest apply",
-            Self::Diff { .. } => "manifest diff",
-            Self::Forget { .. } => "manifest forget",
-        }
-    }
-
-    /// What this command makes of a directory holding no manifest.
-    const fn unrecorded_tree(&self) -> Unrecorded {
-        match self {
-            Self::Write { .. } => Unrecorded::IsTheStartOfOne,
-            Self::Apply { .. } | Self::Diff { .. } | Self::Forget { .. } => {
-                Unrecorded::HasNothingToActOn
-            }
-        }
-    }
 }
 
 /// Authentication subcommands.
@@ -919,12 +899,7 @@ async fn move_one(
 fn manifest_command(as_json: bool, command: &ManifestCommand) -> Result<Output, CliError> {
     let paths = paths()?;
     let config = unvalidated_config(&paths.config)?;
-    let root = tree(
-        command.directory(),
-        config.as_ref(),
-        paths.home.as_deref(),
-        command.unrecorded_tree(),
-    )?;
+    let root = tree(command.directory(), config.as_ref(), paths.home.as_deref())?;
 
     match command {
         ManifestCommand::Write { .. } => manifest_write(as_json, &root),
@@ -973,14 +948,19 @@ fn unvalidated_config(path: &Path) -> Result<Option<Config>, CliError> {
 /// The one tree a manifest command works on.
 ///
 /// A directory named on the command line wins, then the tree the current
-/// directory sits in, then the configured root when there is exactly one.
-/// Several configured roots are several trees, so the command asks which rather
-/// than recording or restoring the wrong one.
+/// directory sits in, then the configured root when there is exactly one, and
+/// finally the current directory. Several configured roots are several trees,
+/// so the command asks which rather than recording or restoring the wrong one.
+///
+/// Falling back to the current directory is what lets `minato manifest write`
+/// record a tree that nothing knows about yet. The commands that read a record
+/// need no special case for it: they land on the directory the user is standing
+/// in and say that it holds no manifest, which names the place they were about
+/// to act on.
 fn tree(
     directory: Option<&PathBuf>,
     config: Option<&Config>,
     home: Option<&Path>,
-    unrecorded: Unrecorded,
 ) -> Result<PathBuf, CliError> {
     if let Some(directory) = directory {
         return Ok(directory.clone());
@@ -998,11 +978,10 @@ fn tree(
         .map(|roots| roots.to_vec())
         .unwrap_or_default();
 
-    match (roots.as_slice(), unrecorded) {
-        ([root], _) => Ok(root.clone()),
-        ([], Unrecorded::IsTheStartOfOne) => current.ok_or(CliError::NoTree),
-        ([], Unrecorded::HasNothingToActOn) => Err(CliError::NoTree),
-        (several, _) => Err(CliError::AmbiguousTree {
+    match roots.as_slice() {
+        [root] => Ok(root.clone()),
+        [] => current.ok_or(CliError::NoTree),
+        several => Err(CliError::AmbiguousTree {
             roots: several
                 .iter()
                 .map(|root| root.display().to_string())
@@ -1010,17 +989,6 @@ fn tree(
                 .join(", "),
         }),
     }
-}
-
-/// Whether a command can work on a tree that has never been recorded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Unrecorded {
-    /// The current directory is the tree being recorded, so it needs no file
-    /// to be found by.
-    IsTheStartOfOne,
-
-    /// There is nothing to read or restore until a tree has been recorded.
-    HasNothingToActOn,
 }
 
 /// The roots a scan reads: the configured ones, and the tree this run stands in.
@@ -1143,19 +1111,12 @@ fn manifest_apply(
 
         // A move that cannot be made is one repository's failure, not the
         // batch's, so it is reported like any other and the rest go on.
-        actions::move_to_path(
+        actions::relocate(
             Some(misplaced.entry.id.clone()),
             &misplaced.found,
             recorded,
             mode,
         )
-        .unwrap_or_else(|error| actions::Report {
-            id: Some(misplaced.entry.id.clone()),
-            path: Some(misplaced.found.clone()),
-            outcome: actions::Outcome::Failed {
-                error: error.to_string(),
-            },
-        })
     }));
 
     let summary = actions::Summary { reports };

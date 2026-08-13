@@ -107,7 +107,18 @@ const fn narrowable(command: &Command) -> Narrowable {
         Command::List { .. } => ("list", REMOTE, WORKS_REMOTELY),
         Command::SyncFork { .. } => ("sync-fork", REMOTE, WORKS_REMOTELY),
         Command::Move { .. } => ("move", NONE, NAMES_ITS_SUBJECT),
-        Command::Manifest { command } => (command.typed_as(), NONE, ACTS_ON_A_TREE),
+        Command::Manifest {
+            command: crate::cli::ManifestCommand::Write { .. },
+        } => ("manifest write", NONE, ACTS_ON_A_TREE),
+        Command::Manifest {
+            command: crate::cli::ManifestCommand::Apply { .. },
+        } => ("manifest apply", NONE, ACTS_ON_A_TREE),
+        Command::Manifest {
+            command: crate::cli::ManifestCommand::Diff { .. },
+        } => ("manifest diff", NONE, ACTS_ON_A_TREE),
+        Command::Manifest {
+            command: crate::cli::ManifestCommand::Forget { .. },
+        } => ("manifest forget", NONE, ACTS_ON_A_TREE),
         Command::Refresh { .. } => ("refresh", NONE, TOUCHES_NOTHING),
         Command::Auth { .. } => ("auth status", NONE, TOUCHES_NOTHING),
         Command::Doctor { .. } => ("doctor", NONE, TOUCHES_NOTHING),
