@@ -101,6 +101,24 @@ The following never happen implicitly, under any command:
 Bulk actions are failure-isolated.
 One repository failing does not abort the batch. Each result is captured, a summary is printed, and the process exits non-zero if any repository failed.
 
+## Manifest
+
+The scan derives the tree from disk, which answers what is here rather than what should be.
+The manifest is the other half: `.minato.toml`, in the root it describes, naming each repository and the place it occupies beneath that root.
+
+The file sits in the tree rather than in the configuration, so the file itself is the root reference.
+Paths are relative to the directory holding it, restoring targets that directory, and a tree carries its own layout between machines without anything agreeing on absolute paths.
+A command run from inside a tree finds the nearest manifest above it, so a restored tree needs no configuration to be usable.
+
+Writing is additive.
+An entry whose clone is absent is kept, because a machine holding part of a tree must not erase the rest from a file shared with the machines that hold it.
+Removing a repository is `minato manifest forget`, which is asked for.
+
+Restoring clones what is recorded and absent, and reports a clone sitting somewhere else rather than moving it, since something put it there.
+`--relocate` moves it.
+
+A manifest arrives over whatever the user syncs with, so it is treated as input: an absolute path, a `..`, a duplicate identity, or a version this build does not know is refused when the file is read, rather than surprising a clone or a rename later.
+
 ## Cache
 
 Provider responses and the local scan are cached as JSON under the platform cache directory, one file per provider and owner plus one for the scan.

@@ -76,6 +76,9 @@ const NAMES_ITS_SUBJECT: &str = "it acts on the one repository you name, so ther
 /// Shown by a command that acts on no repository at all.
 const TOUCHES_NOTHING: &str = "it acts on no repository, so there is nothing to narrow.";
 
+/// Shown by the manifest commands, which act on a tree rather than a selection.
+const ACTS_ON_A_TREE: &str = "it records or restores one tree whole, so a condition would leave a manifest describing part of it. Name the tree instead, and use `minato manifest forget` to drop a repository from it.";
+
 /// What a command narrows by, and what to say about a condition it does not.
 #[derive(Debug)]
 struct Narrowable {
@@ -104,6 +107,18 @@ const fn narrowable(command: &Command) -> Narrowable {
         Command::List { .. } => ("list", REMOTE, WORKS_REMOTELY),
         Command::SyncFork { .. } => ("sync-fork", REMOTE, WORKS_REMOTELY),
         Command::Move { .. } => ("move", NONE, NAMES_ITS_SUBJECT),
+        Command::Manifest {
+            command: crate::cli::ManifestCommand::Write { .. },
+        } => ("manifest write", NONE, ACTS_ON_A_TREE),
+        Command::Manifest {
+            command: crate::cli::ManifestCommand::Apply { .. },
+        } => ("manifest apply", NONE, ACTS_ON_A_TREE),
+        Command::Manifest {
+            command: crate::cli::ManifestCommand::Diff { .. },
+        } => ("manifest diff", NONE, ACTS_ON_A_TREE),
+        Command::Manifest {
+            command: crate::cli::ManifestCommand::Forget { .. },
+        } => ("manifest forget", NONE, ACTS_ON_A_TREE),
         Command::Refresh { .. } => ("refresh", NONE, TOUCHES_NOTHING),
         Command::Auth { .. } => ("auth status", NONE, TOUCHES_NOTHING),
         Command::Doctor { .. } => ("doctor", NONE, TOUCHES_NOTHING),
@@ -136,6 +151,10 @@ const BY_PATH: &[(&[&str], &[Narrowing])] = &[
     (&["list"], REMOTE),
     (&["sync-fork"], REMOTE),
     (&["move"], NONE),
+    (&["manifest", "write"], NONE),
+    (&["manifest", "apply"], NONE),
+    (&["manifest", "diff"], NONE),
+    (&["manifest", "forget"], NONE),
     (&["refresh"], NONE),
     (&["auth", "status"], NONE),
     (&["doctor"], NONE),

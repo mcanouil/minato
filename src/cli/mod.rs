@@ -8,6 +8,7 @@ pub mod completions;
 mod narrowing;
 mod render;
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
@@ -18,11 +19,12 @@ use std::fmt::Write as _;
 use crate::actions::{self, Mode};
 use crate::cache::{Cache, Cached};
 use crate::compare::{self, Comparison, State, TrackedOwners};
-use crate::config::{self, Config};
+use crate::config::{self, Config, ResolvedRoots};
 use crate::filter::{self, Filter};
 use crate::github::auth;
 use crate::github::{Account, GitHubClient, GitHubError};
-use crate::model::{Provider, RemoteRepo};
+use crate::manifest::{self, Manifest};
+use crate::model::{Provider, RemoteRepo, RepoId};
 use crate::scan;
 
 use render::{Table, describe_age};
@@ -201,6 +203,18 @@ pub enum Command {
         dry_run: bool,
     },
 
+    /// Record where clones sit, and restore a tree from that record.
+    ///
+    /// The record is a `.minato.toml` file in the root it describes, so the
+    /// file is the reference: every path in it is relative to the directory
+    /// holding it, and restoring puts clones back beneath that directory
+    /// whatever it is called on this machine. Sync the directory however you
+    /// already sync anything, and the layout travels with it.
+    Manifest {
+        #[command(subcommand)]
+        command: ManifestCommand,
+    },
+
     /// Discard cached data so the next run asks the provider again.
     Refresh {
         #[command(flatten)]
@@ -262,6 +276,102 @@ pub enum Command {
         #[command(flatten)]
         selection: Selection,
     },
+}
+
+/// Manifest subcommands.
+///
+/// Each takes the tree to work on the same way: the directory named on the
+/// command line, else the nearest one at or above the current directory holding
+/// a manifest, else every configured root. None of them asks a provider
+/// anything, so a machine with no configuration and no token can still restore
+/// a tree it has synced.
+#[derive(Debug, Subcommand)]
+pub enum ManifestCommand {
+    /// Record every clone found in the tree, creating the manifest if needed.
+    ///
+    /// Nothing is ever removed: a repository recorded here but absent from this
+    /// machine is kept, since another machine sharing the file may hold it.
+    /// Use `minato manifest forget` to drop one deliberately.
+    Write {
+        #[command(flatten)]
+        selection: Selection,
+
+        /// Which tree, defaulting to the one the current directory sits in.
+        #[arg(value_name = "DIRECTORY")]
+        directory: Option<PathBuf>,
+    },
+
+    /// Restore the tree: clone what the manifest records and this machine lacks.
+    ///
+    /// A clone sitting somewhere other than its recorded place is reported and
+    /// left alone, since it was put there by someone rather than by a manifest.
+    /// `--relocate` moves those into the recorded place instead.
+    Apply {
+        #[command(flatten)]
+        selection: Selection,
+
+        /// Which tree, defaulting to the one the current directory sits in.
+        #[arg(value_name = "DIRECTORY")]
+        directory: Option<PathBuf>,
+
+        /// Move clones that sit somewhere other than their recorded place.
+        #[arg(long)]
+        relocate: bool,
+
+        /// Report what restoring targets, and change nothing.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Clone with a truncated history.
+        #[arg(long)]
+        shallow: bool,
+    },
+
+    /// Report how the manifest and the tree on disk disagree.
+    Diff {
+        #[command(flatten)]
+        selection: Selection,
+
+        /// Which tree, defaulting to the one the current directory sits in.
+        #[arg(value_name = "DIRECTORY")]
+        directory: Option<PathBuf>,
+    },
+
+    /// Stop recording one repository, without touching its clone.
+    Forget {
+        #[command(flatten)]
+        selection: Selection,
+
+        /// Which repository, named by identity, owner/name, or bare name.
+        #[arg(value_name = "REPOSITORY")]
+        repository: String,
+
+        /// Which tree, defaulting to the one the current directory sits in.
+        #[arg(value_name = "DIRECTORY")]
+        directory: Option<PathBuf>,
+    },
+}
+
+impl ManifestCommand {
+    /// The tree named on the command line, if one was.
+    const fn directory(&self) -> Option<&PathBuf> {
+        match self {
+            Self::Write { directory, .. }
+            | Self::Apply { directory, .. }
+            | Self::Diff { directory, .. }
+            | Self::Forget { directory, .. } => directory.as_ref(),
+        }
+    }
+
+    /// What this command makes of a directory holding no manifest.
+    const fn unrecorded_tree(&self) -> Unrecorded {
+        match self {
+            Self::Write { .. } => Unrecorded::IsTheStartOfOne,
+            Self::Apply { .. } | Self::Diff { .. } | Self::Forget { .. } => {
+                Unrecorded::HasNothingToActOn
+            }
+        }
+    }
 }
 
 /// Authentication subcommands.
@@ -328,6 +438,37 @@ pub enum CliError {
     #[error(transparent)]
     Group(#[from] actions::InvalidGroupError),
 
+    /// A manifest was not read or written.
+    #[error(transparent)]
+    Manifest(#[from] manifest::ManifestError),
+
+    /// No tree was named, found, or configured.
+    #[error(
+        "no tree to work on. Name a directory, run this from inside a tree holding a `{}`, or set `local.roots` in the configuration",
+        manifest::FILE_NAME
+    )]
+    NoTree,
+
+    /// Several roots are configured, so which tree was meant is a guess.
+    #[error(
+        "`local.roots` holds several trees ({roots}), so name the one you mean, or run this from inside it"
+    )]
+    AmbiguousTree {
+        /// The configured roots, as written.
+        roots: String,
+    },
+
+    /// The tree holds no manifest to act on.
+    #[error(
+        "`{}` holds no `{}`. Record the tree with `minato manifest write` first",
+        root.display(),
+        manifest::FILE_NAME
+    )]
+    NoManifest {
+        /// The tree that holds none.
+        root: PathBuf,
+    },
+
     /// A command was narrowed by a condition it cannot act on.
     #[error(transparent)]
     Narrowing(#[from] narrowing::InapplicableNarrowingError),
@@ -391,6 +532,13 @@ impl Cli {
             | Command::Update { selection, .. }
             | Command::SyncFork { selection, .. }
             | Command::Move { selection, .. }
+            | Command::Manifest {
+                command:
+                    ManifestCommand::Write { selection, .. }
+                    | ManifestCommand::Apply { selection, .. }
+                    | ManifestCommand::Diff { selection, .. }
+                    | ManifestCommand::Forget { selection, .. },
+            }
             | Command::Refresh { selection }
             | Command::Auth {
                 command: AuthCommand::Status { selection },
@@ -478,6 +626,7 @@ pub async fn run(cli: &Cli) -> Result<Output, CliError> {
             group,
             dry_run,
         } => move_one(cli, repository, group, mode(*dry_run)).await,
+        Command::Manifest { command } => manifest_command(cli.json, command),
     }
 }
 
@@ -505,7 +654,7 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
     let config = Config::load_from(&paths.config)?;
     let gathered = gather(cli, &paths, &config).await?;
 
-    let roots = config.resolved_roots(paths.home.as_deref())?;
+    let roots = scanning_roots(&config, paths.home.as_deref())?;
     let scanned = scan::scan(&roots, scan::DEFAULT_MAX_DEPTH);
     let comparisons = cli.filter().apply(compare::compare(
         &gathered.remotes,
@@ -535,12 +684,17 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
         Act::Update => actions::update_all(&comparisons, mode),
     };
 
+    // A tree that keeps a record of itself keeps it up to date without being
+    // asked again, so a clone lands in the manifest the way it lands on disk.
+    let notes = record_in_manifests(&summary);
+
     let mut output = summary_output(cli.json, &summary)?;
 
     // A root that could not be read would otherwise make every repository look
     // uncloned with no hint why, so the scan's notes travel with the result.
     if !cli.json {
         append_scan_notes(&mut output.text, &scanned);
+        append_manifest_notes(&mut output.text, &notes);
     }
 
     Ok(output)
@@ -712,23 +866,449 @@ async fn move_one(
     let config = Config::load_from(&paths.config)?;
     let gathered = gather(cli, &paths, &config).await?;
 
-    let roots = config.resolved_roots(paths.home.as_deref())?;
+    let roots = scanning_roots(&config, paths.home.as_deref())?;
     let scanned = scan::scan(&roots, scan::DEFAULT_MAX_DEPTH);
     let comparisons = compare::compare(&gathered.remotes, &scanned.repositories, &gathered.tracked);
 
     let found = actions::find_one(&comparisons, repository)?;
     let report = actions::move_to_group(found, repository, &roots, group, mode)?;
 
+    // Where a repository sits is exactly what a manifest records, so a move is
+    // followed into the record of the tree it happened in.
+    let notes = record_in_manifests(&actions::Summary {
+        reports: vec![report.clone()],
+    });
+
     if cli.json {
         return Ok(serde_json::to_string_pretty(&report)?.into());
     }
 
-    Ok(match &report.outcome {
+    let mut out = match &report.outcome {
         actions::Outcome::Would { detail } => format!("Would {detail}."),
         actions::Outcome::Done { detail } => format!("Did {detail}."),
         other => format!("{other:?}"),
+    };
+
+    append_manifest_notes(&mut out, &notes);
+
+    Ok(out.into())
+}
+
+/// Records where clones sit, and restores a tree from that record.
+fn manifest_command(as_json: bool, command: &ManifestCommand) -> Result<Output, CliError> {
+    let paths = paths()?;
+    let config = unvalidated_config(&paths.config)?;
+    let root = tree(
+        command.directory(),
+        config.as_ref(),
+        paths.home.as_deref(),
+        command.unrecorded_tree(),
+    )?;
+
+    match command {
+        ManifestCommand::Write { .. } => manifest_write(as_json, &root),
+        ManifestCommand::Apply {
+            relocate,
+            dry_run,
+            shallow,
+            ..
+        } => manifest_apply(
+            as_json,
+            &root,
+            config.as_ref(),
+            *relocate,
+            *shallow,
+            mode(*dry_run),
+        ),
+        ManifestCommand::Diff { .. } => manifest_diff(as_json, &root),
+        ManifestCommand::Forget { repository, .. } => manifest_forget(as_json, &root, repository),
     }
-    .into())
+}
+
+/// The configuration as written, without asking it to be usable.
+///
+/// A manifest command works on a machine that has just been rebuilt, where
+/// there may be no configuration at all and no account configured in it. It
+/// still reads one when there is, for the clone protocol and for the root to
+/// fall back on. A file that cannot be read or parsed is reported rather than
+/// ignored: that is a mistake worth knowing about, whichever command hits it.
+fn unvalidated_config(path: &Path) -> Result<Option<Config>, CliError> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(Config::from_toml(&text).map_err(|source| {
+            config::ConfigError::Parse {
+                path: path.to_owned(),
+                source,
+            }
+        })?)),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(source) => Err(config::ConfigError::Read {
+            path: path.to_owned(),
+            source,
+        }
+        .into()),
+    }
+}
+
+/// The one tree a manifest command works on.
+///
+/// A directory named on the command line wins, then the tree the current
+/// directory sits in, then the configured root when there is exactly one.
+/// Several configured roots are several trees, so the command asks which rather
+/// than recording or restoring the wrong one.
+fn tree(
+    directory: Option<&PathBuf>,
+    config: Option<&Config>,
+    home: Option<&Path>,
+    unrecorded: Unrecorded,
+) -> Result<PathBuf, CliError> {
+    if let Some(directory) = directory {
+        return Ok(directory.clone());
+    }
+
+    let current = std::env::current_dir().ok();
+
+    if let Some(found) = current.as_deref().and_then(manifest::find_upward) {
+        return Ok(found);
+    }
+
+    let roots = config
+        .map(|config| config.resolved_roots(home))
+        .transpose()?
+        .map(|roots| roots.to_vec())
+        .unwrap_or_default();
+
+    match (roots.as_slice(), unrecorded) {
+        ([root], _) => Ok(root.clone()),
+        ([], Unrecorded::IsTheStartOfOne) => current.ok_or(CliError::NoTree),
+        ([], Unrecorded::HasNothingToActOn) => Err(CliError::NoTree),
+        (several, _) => Err(CliError::AmbiguousTree {
+            roots: several
+                .iter()
+                .map(|root| root.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+        }),
+    }
+}
+
+/// Whether a command can work on a tree that has never been recorded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Unrecorded {
+    /// The current directory is the tree being recorded, so it needs no file
+    /// to be found by.
+    IsTheStartOfOne,
+
+    /// There is nothing to read or restore until a tree has been recorded.
+    HasNothingToActOn,
+}
+
+/// The roots a scan reads: the configured ones, and the tree this run stands in.
+///
+/// A manifest names the root it describes by sitting in it, so a tree restored
+/// on a machine that has never been configured is still a tree, and a command
+/// run from inside it should see it. The discovered root is appended rather than
+/// prepended, so the first configured root stays where a new clone lands, and it
+/// is left out when a configured root already covers it, so the groups beneath
+/// that root keep being read from the same place.
+fn scanning_roots(config: &Config, home: Option<&Path>) -> Result<ResolvedRoots, CliError> {
+    let configured = config.resolved_roots(home)?;
+
+    let Some(found) = std::env::current_dir()
+        .ok()
+        .as_deref()
+        .and_then(manifest::find_upward)
+    else {
+        return Ok(configured);
+    };
+
+    if configured.iter().any(|root| found.starts_with(root)) {
+        return Ok(configured);
+    }
+
+    let mut roots = configured.to_vec();
+    roots.push(found);
+
+    Ok(ResolvedRoots::from_resolved(roots))
+}
+
+/// Reads what is cloned beneath one root.
+fn scan_tree(root: &Path) -> scan::Scan {
+    scan::scan(
+        &config::ResolvedRoots::from_resolved(vec![root.to_owned()]),
+        scan::DEFAULT_MAX_DEPTH,
+    )
+}
+
+/// Records every clone found in the tree, keeping what is recorded elsewhere.
+fn manifest_write(as_json: bool, root: &Path) -> Result<Output, CliError> {
+    let scanned = scan_tree(root);
+    let mut manifest = Manifest::load(root)?.unwrap_or_default();
+
+    let plan = manifest.diff(root, &scanned.repositories);
+    manifest.merge(root, &scanned.repositories);
+    manifest.save(root)?;
+
+    if as_json {
+        return Ok(serde_json::to_string_pretty(&manifest)?.into());
+    }
+
+    let mut out = format!(
+        "Recorded {} repositories in {}.\n",
+        manifest.repositories.len(),
+        Manifest::path_in(root).display()
+    );
+
+    let _ = write!(
+        out,
+        "{} added, {} moved, {} kept for machines that hold them.",
+        plan.unrecorded.len(),
+        plan.misplaced.len(),
+        plan.missing.len()
+    );
+
+    append_scan_notes(&mut out, &scanned);
+
+    Ok(out.into())
+}
+
+/// Restores the tree the manifest records.
+fn manifest_apply(
+    as_json: bool,
+    root: &Path,
+    config: Option<&Config>,
+    relocate: bool,
+    shallow: bool,
+    mode: Mode,
+) -> Result<Output, CliError> {
+    let Some(manifest) = Manifest::load(root)? else {
+        return Err(CliError::NoManifest {
+            root: root.to_owned(),
+        });
+    };
+
+    let scanned = scan_tree(root);
+    let plan = manifest.diff(root, &scanned.repositories);
+    let protocol = clone_protocol(config);
+
+    let mut reports: Vec<actions::Report> = plan
+        .missing
+        .iter()
+        .map(|entry| {
+            actions::clone_one(&entry.id, entry.path.to_path(root), protocol, shallow, mode)
+        })
+        .collect();
+
+    reports.extend(plan.misplaced.iter().map(|misplaced| {
+        let recorded = misplaced.entry.path.to_path(root);
+
+        if !relocate {
+            return actions::Report {
+                id: Some(misplaced.entry.id.clone()),
+                path: Some(misplaced.found.clone()),
+                outcome: actions::Outcome::Skipped {
+                    reason: format!(
+                        "it sits at {}, recorded at {}. Pass --relocate to move it",
+                        misplaced.found.display(),
+                        recorded.display()
+                    ),
+                },
+            };
+        }
+
+        // A move that cannot be made is one repository's failure, not the
+        // batch's, so it is reported like any other and the rest go on.
+        actions::move_to_path(
+            Some(misplaced.entry.id.clone()),
+            &misplaced.found,
+            recorded,
+            mode,
+        )
+        .unwrap_or_else(|error| actions::Report {
+            id: Some(misplaced.entry.id.clone()),
+            path: Some(misplaced.found.clone()),
+            outcome: actions::Outcome::Failed {
+                error: error.to_string(),
+            },
+        })
+    }));
+
+    let summary = actions::Summary { reports };
+    let mut output = summary_output(as_json, &summary)?;
+
+    if !as_json {
+        append_scan_notes(&mut output.text, &scanned);
+    }
+
+    Ok(output)
+}
+
+/// Reports how the manifest and the tree disagree.
+fn manifest_diff(as_json: bool, root: &Path) -> Result<Output, CliError> {
+    let Some(manifest) = Manifest::load(root)? else {
+        return Err(CliError::NoManifest {
+            root: root.to_owned(),
+        });
+    };
+
+    let scanned = scan_tree(root);
+    let plan = manifest.diff(root, &scanned.repositories);
+
+    if as_json {
+        return Ok(serde_json::to_string_pretty(&plan)?.into());
+    }
+
+    let mut out = if plan.is_empty() {
+        format!(
+            "{} matches the tree in {}.",
+            manifest::FILE_NAME,
+            root.display()
+        )
+    } else {
+        render_plan(root, &plan)
+    };
+
+    append_scan_notes(&mut out, &scanned);
+
+    Ok(out.into())
+}
+
+/// Stops recording one repository, leaving its clone alone.
+fn manifest_forget(as_json: bool, root: &Path, repository: &str) -> Result<Output, CliError> {
+    let Some(mut manifest) = Manifest::load(root)? else {
+        return Err(CliError::NoManifest {
+            root: root.to_owned(),
+        });
+    };
+
+    let forgotten = manifest.forget(repository);
+
+    if forgotten.is_empty() {
+        return Err(actions::MoveError::NoMatch {
+            wanted: repository.to_owned(),
+        }
+        .into());
+    }
+
+    manifest.save(root)?;
+
+    if as_json {
+        return Ok(serde_json::to_string_pretty(&forgotten)?.into());
+    }
+
+    let names = forgotten
+        .iter()
+        .map(|entry| entry.id.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    Ok(format!("Stopped recording {names}. Nothing on disk was touched.").into())
+}
+
+/// The protocol new clones use, defaulting when no configuration says.
+fn clone_protocol(config: Option<&Config>) -> crate::model::CloneProtocol {
+    match config
+        .map(|config| config.local.protocol)
+        .unwrap_or_default()
+    {
+        config::Protocol::Ssh => crate::model::CloneProtocol::Ssh,
+        config::Protocol::Https => crate::model::CloneProtocol::Https,
+    }
+}
+
+/// Renders what the manifest and the tree disagree about.
+fn render_plan(root: &Path, plan: &manifest::Plan) -> String {
+    let mut table = Table::new(["PATH", "REPOSITORY", "NOTE"]);
+
+    for entry in &plan.missing {
+        table.push([
+            entry.path.to_string(),
+            entry.id.to_string(),
+            "recorded, not cloned here".to_owned(),
+        ]);
+    }
+
+    for misplaced in &plan.misplaced {
+        table.push([
+            misplaced.entry.path.to_string(),
+            misplaced.entry.id.to_string(),
+            format!(
+                "cloned at {} instead",
+                misplaced
+                    .found
+                    .strip_prefix(root)
+                    .unwrap_or(&misplaced.found)
+                    .display()
+            ),
+        ]);
+    }
+
+    for entry in &plan.unrecorded {
+        table.push([
+            entry.path.to_string(),
+            entry.id.to_string(),
+            "cloned here, not recorded".to_owned(),
+        ]);
+    }
+
+    table.to_string()
+}
+
+/// Records what an action did in the manifest of the tree it happened in.
+///
+/// A manifest is amended only where one already exists: recording a tree is
+/// asked for with `minato manifest write`, and a command that clones or moves
+/// should not decide on its own that a directory is one to keep a record of.
+///
+/// Errors are returned rather than raised, since whatever happened on disk has
+/// happened and its report is worth more than a failure to write it down.
+fn record_in_manifests(summary: &actions::Summary) -> Vec<manifest::ManifestError> {
+    let mut trees: BTreeMap<PathBuf, Vec<(&RepoId, PathBuf)>> = BTreeMap::new();
+
+    for report in &summary.reports {
+        let (Some(id), Some(path), actions::Outcome::Done { .. }) =
+            (report.id.as_ref(), report.path.as_ref(), &report.outcome)
+        else {
+            continue;
+        };
+
+        if let Some(root) = manifest::find_upward(path) {
+            trees.entry(root).or_default().push((id, path.clone()));
+        }
+    }
+
+    let mut errors = Vec::new();
+
+    for (root, done) in trees {
+        let mut manifest = match Manifest::load(&root) {
+            Ok(Some(manifest)) => manifest,
+            // The file was there when the tree was found and is not now, which
+            // means something else is writing it; there is nothing to amend.
+            Ok(None) => continue,
+            Err(error) => {
+                errors.push(error);
+                continue;
+            }
+        };
+
+        for (id, path) in done {
+            if let Some(relative) = manifest::RelativePath::between(&root, &path) {
+                manifest.record(id.clone(), relative);
+            }
+        }
+
+        if let Err(error) = manifest.save(&root) {
+            errors.push(error);
+        }
+    }
+
+    errors
+}
+
+/// Appends what recording an action in a manifest failed to do.
+fn append_manifest_notes(out: &mut String, errors: &[manifest::ManifestError]) {
+    for error in errors {
+        let _ = write!(out, "\nthe manifest was not updated: {error}");
+    }
 }
 
 /// Opens the interactive browser over the same comparison the commands use.
@@ -736,7 +1316,7 @@ async fn tui(cli: &Cli) -> Result<Output, CliError> {
     let paths = paths()?;
     let config = Config::load_from(&paths.config)?;
     let gathered = gather(cli, &paths, &config).await?;
-    let roots = config.resolved_roots(paths.home.as_deref())?;
+    let roots = scanning_roots(&config, paths.home.as_deref())?;
     let filter = cli.filter();
 
     let build = |remotes: &[crate::model::RemoteRepo]| {
@@ -1263,7 +1843,7 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
     let config = Config::load_from(&paths.config)?;
     let gathered = gather(cli, &paths, &config).await?;
 
-    let roots = config.resolved_roots(paths.home.as_deref())?;
+    let roots = scanning_roots(&config, paths.home.as_deref())?;
     let scanned = scan::scan(&roots, scan::DEFAULT_MAX_DEPTH);
 
     let comparisons = cli.filter().apply(compare::compare(
@@ -1459,6 +2039,89 @@ mod tests {
     #[test]
     fn the_command_surface_is_well_formed() {
         Cli::command().debug_assert();
+    }
+
+    /// What an action reports having done to one repository.
+    fn done(id: &RepoId, path: &Path) -> actions::Summary {
+        actions::Summary {
+            reports: vec![actions::Report {
+                id: Some(id.clone()),
+                path: Some(path.to_owned()),
+                outcome: actions::Outcome::Done {
+                    detail: "something".to_owned(),
+                },
+            }],
+        }
+    }
+
+    #[test]
+    fn an_action_in_a_recorded_tree_is_written_into_its_manifest() {
+        let root = tempfile::tempdir().expect("a temporary root");
+        std::fs::write(Manifest::path_in(root.path()), "version = 1\n")
+            .expect("a recorded tree to start from");
+        let cloned = root.path().join("apps").join("minato");
+        std::fs::create_dir_all(&cloned).expect("the clone to be in place");
+
+        let id = RepoId::new(Provider::GitHub, "mcanouil", "minato");
+        let errors = record_in_manifests(&done(&id, &cloned));
+
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            Manifest::load(root.path())
+                .expect("the manifest to be readable")
+                .expect("a manifest to be there")
+                .entry(&id)
+                .map(|entry| entry.path.to_string()),
+            Some("apps/minato".to_owned()),
+            "a clone lands in the record of the tree it landed in"
+        );
+    }
+
+    #[test]
+    fn an_action_in_a_tree_with_no_manifest_creates_none() {
+        let root = tempfile::tempdir().expect("a temporary root");
+        let cloned = root.path().join("apps").join("minato");
+        std::fs::create_dir_all(&cloned).expect("the clone to be in place");
+
+        let errors = record_in_manifests(&done(
+            &RepoId::new(Provider::GitHub, "mcanouil", "minato"),
+            &cloned,
+        ));
+
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(
+            !Manifest::path_in(root.path()).exists(),
+            "recording a tree is asked for, not decided by a clone"
+        );
+    }
+
+    #[test]
+    fn a_rehearsed_action_records_nothing() {
+        let root = tempfile::tempdir().expect("a temporary root");
+        std::fs::write(Manifest::path_in(root.path()), "version = 1\n")
+            .expect("a recorded tree to start from");
+        let cloned = root.path().join("apps").join("minato");
+        std::fs::create_dir_all(&cloned).expect("a directory to point at");
+
+        let errors = record_in_manifests(&actions::Summary {
+            reports: vec![actions::Report {
+                id: Some(RepoId::new(Provider::GitHub, "mcanouil", "minato")),
+                path: Some(cloned),
+                outcome: actions::Outcome::Would {
+                    detail: "something".to_owned(),
+                },
+            }],
+        });
+
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(
+            Manifest::load(root.path())
+                .expect("the manifest to be readable")
+                .expect("a manifest to be there")
+                .repositories
+                .is_empty(),
+            "a rehearsal changed no disk, so it records nothing"
+        );
     }
 
     /// An environment rooted in a temporary directory, so that a check never

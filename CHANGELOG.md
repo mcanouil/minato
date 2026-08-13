@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- feat: add `minato manifest`, which records where clones sit and restores a tree from that record. The record is a `.minato.toml` file in the root it describes, so the file is the root reference: paths are relative to it, restoring targets that directory, and a tree carries its layout between machines without any configuration. `write` records every clone found and never drops one another machine may hold, `apply` clones what is recorded and missing here and reports a clone sitting elsewhere unless `--relocate` is passed, `diff` reports what the record and the tree disagree about, and `forget` stops recording one repository without touching its clone. `clone` and `move` keep an existing manifest up to date, and any command run from inside a recorded tree works on it (#99).
 - feat: lead the `minato status` table with `PATH`, followed by `REPOSITORY`, `GROUP`, `STATE`, and `NOTES`, and order rows by group, then by path, so clones sharing a directory read together. Repositories with no clone, and clones sitting directly in a root, come last rather than first. The ordering is shared, so `--json` and the `fetch` and `update` reports follow it too. The interactive view gains the same leading path column, and ordering it by group with `s` now follows the same group, then path order, leaving the ungrouped rows last as well (#98).
 
 ## 0.4.1 (2026-08-07)

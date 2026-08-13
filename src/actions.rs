@@ -152,6 +152,42 @@ pub fn clone_destination(root: &Path, layout: &str, id: &RepoId) -> PathBuf {
     root.join(rendered)
 }
 
+/// Clones one repository into the place chosen for it.
+///
+/// Where that place comes from is the caller's business: a layout applied under
+/// a root for a repository that has never been cloned, or the place a manifest
+/// records for one being restored. Nothing is written into an occupied
+/// destination, since whatever is already there was not put there by this run.
+#[must_use]
+pub fn clone_one(
+    id: &RepoId,
+    destination: PathBuf,
+    protocol: CloneProtocol,
+    shallow: bool,
+    mode: Mode,
+) -> Report {
+    let url = id.clone_url(protocol);
+
+    if destination.exists() {
+        return Report {
+            id: Some(id.clone()),
+            path: Some(destination.clone()),
+            outcome: Outcome::Skipped {
+                reason: format!("{} already exists", destination.display()),
+            },
+        };
+    }
+
+    let detail = format!("clone {url} into {}", destination.display());
+    let outcome = mode.permitted(detail, || git::clone(&url, &destination, shallow));
+
+    Report {
+        id: Some(id.clone()),
+        path: Some(destination),
+        outcome,
+    }
+}
+
 /// Clones every repository that has no local copy.
 ///
 /// A repository is only cloned when nothing exists at its destination. An
@@ -185,26 +221,8 @@ pub fn clone_missing(
             };
 
             let destination = clone_destination(root, &local.layout, &id);
-            let url = id.clone_url(protocol);
 
-            if destination.exists() {
-                return Report {
-                    id: Some(id),
-                    path: Some(destination.clone()),
-                    outcome: Outcome::Skipped {
-                        reason: format!("{} already exists", destination.display()),
-                    },
-                };
-            }
-
-            let detail = format!("clone {url} into {}", destination.display());
-            let outcome = mode.permitted(detail, || git::clone(&url, &destination, shallow));
-
-            Report {
-                id: Some(id),
-                path: Some(destination),
-                outcome,
-            }
+            clone_one(&id, destination, protocol, shallow, mode)
         })
         .collect();
 
@@ -502,31 +520,51 @@ pub fn move_to_group(
 
     let destination = move_destination(&path, root, group);
 
-    if destination.exists() {
-        return Err(MoveError::DestinationExists { destination });
+    move_to_path(comparison.id.clone(), &path, destination, mode)
+}
+
+/// Moves a clone to an exact place, whatever chose that place.
+///
+/// A clone does not care where it sits, so this is a plain rename. It is still
+/// a change to the user's filesystem, so it refuses anything it would have to
+/// overwrite: a group computed from a name and a place read from a manifest are
+/// both worth the same caution.
+///
+/// # Errors
+///
+/// Returns an error when something already occupies the destination, or when
+/// the rename itself fails.
+pub fn move_to_path(
+    id: Option<RepoId>,
+    from: &Path,
+    to: PathBuf,
+    mode: Mode,
+) -> Result<Report, MoveError> {
+    if to.exists() {
+        return Err(MoveError::DestinationExists { destination: to });
     }
 
-    let detail = format!("move {} to {}", path.display(), destination.display());
+    let detail = format!("move {} to {}", from.display(), to.display());
 
     let outcome = match mode {
         Mode::DryRun => Outcome::Would { detail },
         Mode::Execute => {
-            if let Some(parent) = destination.parent()
+            if let Some(parent) = to.parent()
                 && let Err(error) = std::fs::create_dir_all(parent)
             {
                 return Err(MoveError::Failed {
-                    from: path,
-                    to: destination,
+                    from: from.to_owned(),
+                    to,
                     message: error.to_string(),
                 });
             }
 
-            match std::fs::rename(&path, &destination) {
+            match std::fs::rename(from, &to) {
                 Ok(()) => Outcome::Done { detail },
                 Err(error) => {
                     return Err(MoveError::Failed {
-                        from: path,
-                        to: destination,
+                        from: from.to_owned(),
+                        to,
                         message: error.to_string(),
                     });
                 }
@@ -535,8 +573,8 @@ pub fn move_to_group(
     };
 
     Ok(Report {
-        id: comparison.id.clone(),
-        path: Some(destination),
+        id,
+        path: Some(to),
         outcome,
     })
 }
@@ -580,6 +618,71 @@ mod tests {
             clone_destination(Path::new("/code"), "{provider}/{owner}/{repo}", &id),
             PathBuf::from("/code/github/mcanouil/minato")
         );
+    }
+
+    #[test]
+    fn cloning_into_an_occupied_place_is_skipped_rather_than_written_into() {
+        let root = tempfile::tempdir().expect("a temporary root");
+        let destination = root.path().join("minato");
+        std::fs::create_dir(&destination).expect("something to be in the way");
+
+        let report = clone_one(
+            &RepoId::new(Provider::GitHub, "mcanouil", "minato"),
+            destination,
+            CloneProtocol::Ssh,
+            false,
+            Mode::Execute,
+        );
+
+        assert!(
+            matches!(report.outcome, Outcome::Skipped { .. }),
+            "whatever is already there was not put there by this run, got: {:?}",
+            report.outcome
+        );
+    }
+
+    #[test]
+    fn moving_to_an_occupied_place_is_refused_and_moves_nothing() {
+        let root = tempfile::tempdir().expect("a temporary root");
+        let from = root.path().join("here");
+        let to = root.path().join("there");
+        std::fs::create_dir(&from).expect("a clone to move");
+        std::fs::create_dir(&to).expect("something to be in the way");
+
+        let error = move_to_path(None, &from, to.clone(), Mode::Execute)
+            .expect_err("an occupied destination to be refused");
+
+        assert!(matches!(error, MoveError::DestinationExists { .. }));
+        assert!(from.exists(), "the clone stays where it was");
+    }
+
+    #[test]
+    fn moving_to_a_place_creates_the_directories_above_it() {
+        let root = tempfile::tempdir().expect("a temporary root");
+        let from = root.path().join("here");
+        let to = root.path().join("apps").join("nested").join("minato");
+        std::fs::create_dir(&from).expect("a clone to move");
+
+        let report =
+            move_to_path(None, &from, to.clone(), Mode::Execute).expect("the move to be made");
+
+        assert!(matches!(report.outcome, Outcome::Done { .. }));
+        assert!(to.exists(), "the clone is at the place asked for");
+        assert!(!from.exists(), "and no longer where it was");
+    }
+
+    #[test]
+    fn a_rehearsed_move_changes_nothing() {
+        let root = tempfile::tempdir().expect("a temporary root");
+        let from = root.path().join("here");
+        let to = root.path().join("there");
+        std::fs::create_dir(&from).expect("a clone to move");
+
+        let report =
+            move_to_path(None, &from, to.clone(), Mode::DryRun).expect("the rehearsal to report");
+
+        assert!(matches!(report.outcome, Outcome::Would { .. }));
+        assert!(from.exists() && !to.exists(), "a rehearsal touches no disk");
     }
 
     #[test]
