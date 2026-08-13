@@ -275,7 +275,10 @@ pub fn compare(
 
 /// Orders two optional keys with the absent value last, the opposite of what
 /// `Option` orders by, so a row missing a key trails the rows that carry one.
-fn absent_last<T: Ord>(left: Option<&T>, right: Option<&T>) -> Ordering {
+///
+/// Shared with the interactive view, which orders the same fields and has to
+/// agree on where an absent one lands.
+pub(crate) fn absent_last<T: Ord>(left: Option<&T>, right: Option<&T>) -> Ordering {
     match (left, right) {
         (Some(left), Some(right)) => left.cmp(right),
         (Some(_), None) => Ordering::Less,

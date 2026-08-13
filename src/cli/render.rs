@@ -67,22 +67,17 @@ impl std::fmt::Display for Table {
 }
 
 fn write_row(out: &mut String, cells: &[String], widths: &[usize]) {
-    let last = widths.len().saturating_sub(1);
     let mut line = String::new();
 
     for (column, width) in widths.iter().enumerate() {
         let cell = cells.get(column).map_or("", String::as_str);
+        let padding = width.saturating_sub(cell.chars().count());
 
-        // The final column is not padded, and a row whose last cells are empty
-        // is trimmed, so no line carries trailing spaces.
-        if column == last {
-            line.push_str(cell);
-        } else {
-            let padding = width.saturating_sub(cell.chars().count());
-            let _ = write!(line, "{cell}{:padding$}  ", "", padding = padding);
-        }
+        let _ = write!(line, "{cell}{:padding$}  ", "", padding = padding);
     }
 
+    // The row is trimmed rather than the final column left unpadded, so a row
+    // whose last cells are empty carries no trailing spaces either.
     let _ = writeln!(out, "{}", line.trim_end());
 }
 

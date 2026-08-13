@@ -4,7 +4,7 @@
 //! interface offers is reachable in a test. The drawing layer reads this and
 //! renders it; it decides nothing.
 
-use crate::compare::{Comparison, State};
+use crate::compare::{Comparison, State, absent_last};
 
 /// How the list is ordered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -14,7 +14,7 @@ pub enum Sort {
     Name,
     /// By state, so what needs attention rises to the top.
     State,
-    /// By group, keeping a category together.
+    /// By group, keeping a category together, with the ungrouped last.
     Group,
 }
 
@@ -281,9 +281,7 @@ impl App {
                 Sort::State => urgency(&left.state)
                     .cmp(&urgency(&right.state))
                     .then_with(|| name_of(left).cmp(&name_of(right))),
-                Sort::Group => left
-                    .group
-                    .cmp(&right.group)
+                Sort::Group => absent_last(left.group.as_ref(), right.group.as_ref())
                     .then_with(|| name_of(left).cmp(&name_of(right))),
             }
         });
@@ -389,6 +387,28 @@ mod tests {
             "zebra",
             "what is in sync should come last"
         );
+    }
+
+    #[test]
+    fn sorting_by_group_leaves_the_ungrouped_last_like_the_command_line() {
+        let mut app = App::new(vec![
+            row("loose", None, State::InSync),
+            row("zebra", Some("perso"), State::InSync),
+            row("alpha", Some("demo"), State::InSync),
+        ]);
+
+        app.cycle_sort();
+        app.cycle_sort();
+
+        assert_eq!(app.sort(), Sort::Group);
+
+        let names: Vec<_> = app
+            .visible()
+            .iter()
+            .map(|row| row.id.as_ref().expect("an id").name.clone())
+            .collect();
+
+        assert_eq!(names, ["alpha", "zebra", "loose"]);
     }
 
     #[test]
