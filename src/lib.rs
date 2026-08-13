@@ -12,6 +12,7 @@ pub mod config;
 pub mod filter;
 pub mod git;
 pub mod github;
+pub mod manifest;
 pub mod model;
 pub mod scan;
 pub mod tui;

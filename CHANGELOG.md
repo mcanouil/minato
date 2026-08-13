@@ -4,8 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- refactor!: `minato move --json` now emits a summary, `{"reports": [...]}`, as every other action command does, rather than the single report it emitted before. A move that succeeds while the manifest of its tree cannot be written is reported in that summary, so the answer says why the run exited non-zero. Read `.reports[0]` for what was previously the whole document.
+
 ### Features
 
+- feat: add `minato manifest`, which records where clones sit and restores a tree from that record. The record is a `.minato.toml` file in the root it describes, so the file is the root reference: paths are relative to it, restoring targets that directory, and a tree carries its layout between machines without any configuration. `write` records every clone found and never drops one another machine may hold, `apply` clones what is recorded and missing here and reports a clone sitting elsewhere unless `--relocate` is passed, `diff` reports what the record and the tree disagree about, and `forget` stops recording one repository without touching its clone. `clone` and `move` keep an existing manifest up to date, in the browser as well as on the command line, while the commands that only read a tree leave it alone. Any command run from inside a recorded tree works on it (#99).
 - feat: lead the `minato status` table with `PATH`, followed by `REPOSITORY`, `GROUP`, `STATE`, and `NOTES`, and order rows by group, then by path, so clones sharing a directory read together. Repositories with no clone, and clones sitting directly in a root, come last rather than first. The ordering is shared, so `--json` and the `fetch` and `update` reports follow it too. The interactive view gains the same leading path column, and ordering it by group with `s` now follows the same group, then path order, leaving the ungrouped rows last as well (#98).
 
 ## 0.4.1 (2026-08-07)

@@ -203,6 +203,37 @@ minato sync-fork                  # fast-forward each behind fork on GitHub
 `sync-fork` uses GitHub's merge-upstream, so it fast-forwards a fork only when it is strictly behind its upstream.
 A fork holding its own commits is reported and left alone rather than merged.
 
+## Record the tree, and put it back
+
+A scan says what is on this machine now.
+A manifest says what the tree should hold, so a rebuilt or second machine can be brought back to the same layout.
+
+```{.bash filename="Terminal"}
+cd ~/Projects
+minato manifest write             # record every clone, into ~/Projects/.minato.toml
+```
+
+The file sits in the tree it describes, and every path in it is relative to that directory.
+Sync the directory however you already sync anything, and the layout travels with it: nothing has to agree about absolute paths, and no configuration is read to restore it.
+
+```{.bash filename="Terminal"}
+minato manifest diff              # what the record and the tree disagree about
+minato manifest apply --dry-run   # what restoring would clone
+minato manifest apply             # clone what is recorded and missing here
+```
+
+A clone sitting somewhere other than its recorded place is reported and left alone, since someone put it there.
+Add `--relocate` to move those into the recorded place instead.
+
+Recording is additive: a repository you do not have here is kept in the file, because the machine that does have it shares the same record.
+Drop one deliberately.
+
+```{.bash filename="Terminal"}
+minato manifest forget minato     # stop recording it; the clone is untouched
+```
+
+Once a tree holds a manifest, `minato clone` and `minato move` keep it up to date, and any command run from inside the tree works on it even on a machine with no configuration yet.
+
 ## Browse it instead
 
 ```{.bash filename="Terminal"}

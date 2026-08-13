@@ -21,6 +21,7 @@ Overview and sync of Git repositories across hosting providers
 * `list` — List every repository, with what the provider reports about it
 * `sync-fork` — Sync forks with their upstream, fast-forward only
 * `move` — Move one repository into a group, which moves it on disk
+* `manifest` — Record where clones sit, and restore a tree from that record
 * `refresh` — Discard cached data so the next run asks the provider again
 * `auth` — Inspect authentication
 * `doctor` — Check that configuration and tooling are usable
@@ -320,6 +321,95 @@ Deliberately one repository at a time: this changes the filesystem, so it is nev
 * `--include-forks` — Include forks, which are hidden by default
 * `--to-group <GROUP>` — The group to move it into, which is a directory path beneath its root, such as `perso/apps`
 * `--dry-run` — Report what moving targets, and change nothing
+
+
+
+## `minato manifest`
+
+Record where clones sit, and restore a tree from that record.
+
+The record is a `.minato.toml` file in the root it describes, so the file is the reference: every path in it is relative to the directory holding it, and restoring puts clones back beneath that directory whatever it is called on this machine. Sync the directory however you already sync anything, and the layout travels with it.
+
+**Usage:** `minato manifest <COMMAND>`
+
+###### **Subcommands:**
+
+* `write` — Record every clone found in the tree, creating the manifest if needed
+* `apply` — Restore the tree: clone what the manifest records and this machine lacks
+* `diff` — Report how the manifest and the tree on disk disagree
+* `forget` — Stop recording one repository, without touching its clone
+
+
+
+## `minato manifest write`
+
+Record every clone found in the tree, creating the manifest if needed.
+
+Nothing is ever removed: a repository recorded here but absent from this machine is kept, since another machine sharing the file may hold it. Use `minato manifest forget` to drop one deliberately.
+
+**Usage:** `minato manifest write [OPTIONS] [DIRECTORY]`
+
+###### **Arguments:**
+
+* `<DIRECTORY>` — Which tree, defaulting to the one the current directory sits in
+
+###### **Options:**
+
+* `--include-forks` — Include forks, which are hidden by default
+
+
+
+## `minato manifest apply`
+
+Restore the tree: clone what the manifest records and this machine lacks.
+
+A clone sitting somewhere other than its recorded place is reported and left alone, since it was put there by someone rather than by a manifest. `--relocate` moves those into the recorded place instead.
+
+**Usage:** `minato manifest apply [OPTIONS] [DIRECTORY]`
+
+###### **Arguments:**
+
+* `<DIRECTORY>` — Which tree, defaulting to the one the current directory sits in
+
+###### **Options:**
+
+* `--include-forks` — Include forks, which are hidden by default
+* `--relocate` — Move clones that sit somewhere other than their recorded place
+* `--dry-run` — Report what restoring targets, and change nothing
+* `--shallow` — Clone with a truncated history
+
+
+
+## `minato manifest diff`
+
+Report how the manifest and the tree on disk disagree
+
+**Usage:** `minato manifest diff [OPTIONS] [DIRECTORY]`
+
+###### **Arguments:**
+
+* `<DIRECTORY>` — Which tree, defaulting to the one the current directory sits in
+
+###### **Options:**
+
+* `--include-forks` — Include forks, which are hidden by default
+
+
+
+## `minato manifest forget`
+
+Stop recording one repository, without touching its clone
+
+**Usage:** `minato manifest forget [OPTIONS] <REPOSITORY> [DIRECTORY]`
+
+###### **Arguments:**
+
+* `<REPOSITORY>` — Which repository, named by identity, owner/name, or bare name
+* `<DIRECTORY>` — Which tree, defaulting to the one the current directory sits in
+
+###### **Options:**
+
+* `--include-forks` — Include forks, which are hidden by default
 
 
 

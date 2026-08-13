@@ -135,6 +135,21 @@ impl RepoId {
         }
     }
 
+    /// Whether this is the repository someone naming `wanted` meant.
+    ///
+    /// A repository is named by a full identity, by `owner/name`, or by its
+    /// name alone, so that a command can be typed without a provider prefix.
+    /// The rule lives here rather than with each command, so every place that
+    /// takes a repository from a person accepts the same three forms.
+    #[must_use]
+    pub fn is_named(&self, wanted: &str) -> bool {
+        let wanted = wanted.to_lowercase();
+
+        self.to_string() == wanted
+            || self.name == wanted
+            || format!("{}/{}", self.owner, self.name) == wanted
+    }
+
     /// The URL a clone of this repository is made from.
     #[must_use]
     pub fn clone_url(&self, protocol: CloneProtocol) -> String {
