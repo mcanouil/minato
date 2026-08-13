@@ -450,17 +450,9 @@ pub fn find_one<'a>(
     comparisons: &'a [Comparison],
     wanted: &str,
 ) -> Result<&'a Comparison, MoveError> {
-    let lowered = wanted.to_lowercase();
-
     let matches: Vec<&Comparison> = comparisons
         .iter()
-        .filter(|comparison| {
-            comparison.id.as_ref().is_some_and(|id| {
-                id.to_string() == lowered
-                    || id.name == lowered
-                    || format!("{}/{}", id.owner, id.name) == lowered
-            })
-        })
+        .filter(|comparison| comparison.id.as_ref().is_some_and(|id| id.is_named(wanted)))
         .collect();
 
     match matches.len() {

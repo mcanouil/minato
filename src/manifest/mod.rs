@@ -445,11 +445,9 @@ impl Manifest {
     /// Matching follows the same rules as naming a repository anywhere else: a
     /// full identity, `owner/name`, or a bare name.
     pub fn forget(&mut self, wanted: &str) -> Vec<Entry> {
-        let lowered = wanted.to_lowercase();
-
         let (forgotten, kept) = std::mem::take(&mut self.repositories)
             .into_iter()
-            .partition(|entry| matches(&entry.id, &lowered));
+            .partition(|entry| entry.id.is_named(wanted));
 
         self.repositories = kept;
 
@@ -465,10 +463,13 @@ impl Manifest {
             .filter_map(|local| local.id.as_ref().map(|id| (id, local)))
             .collect();
 
+        let mut recorded = BTreeSet::new();
         let mut missing = Vec::new();
         let mut misplaced = Vec::new();
 
         for entry in &self.repositories {
+            recorded.insert(&entry.id);
+
             let Some(local) = found.get(&entry.id) else {
                 missing.push(entry.clone());
                 continue;
@@ -484,7 +485,7 @@ impl Manifest {
 
         let unrecorded = found
             .iter()
-            .filter(|(id, _)| self.entry(id).is_none())
+            .filter(|(id, _)| !recorded.contains(*id))
             .filter_map(|(id, local)| {
                 RelativePath::between(root, &local.path).map(|path| Entry {
                     id: (*id).clone(),
@@ -505,11 +506,6 @@ impl Default for Manifest {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Whether `id` is what someone naming `wanted` meant.
-fn matches(id: &RepoId, wanted: &str) -> bool {
-    id.to_string() == wanted || id.name == wanted || format!("{}/{}", id.owner, id.name) == wanted
 }
 
 /// How the manifest and the tree beneath the root disagree.

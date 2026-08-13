@@ -36,54 +36,58 @@ fn git(directory: &Path, arguments: &[&str]) -> String {
 /// would read in a real tree while the objects still come from a local origin.
 /// Nothing here reaches the network.
 struct Tree {
-    _origins: tempfile::TempDir,
+    origins: tempfile::TempDir,
     root: tempfile::TempDir,
 }
 
 impl Tree {
     fn with(clones: &[(&str, &str)]) -> Self {
-        let origins = tempfile::tempdir().expect("a directory for the origins");
-        let root = tempfile::tempdir().expect("a temporary root");
+        let tree = Self {
+            origins: tempfile::tempdir().expect("a directory for the origins"),
+            root: tempfile::tempdir().expect("a temporary root"),
+        };
 
         for (name, place) in clones {
-            let origin = origins.path().join(name);
-            std::fs::create_dir_all(&origin).expect("the origin directory");
-            git(&origin, &["init", "--initial-branch=main", "--quiet"]);
-            git(&origin, &["config", "user.name", "Test"]);
-            git(&origin, &["config", "user.email", "test@example.com"]);
-            git(&origin, &["config", "commit.gpgsign", "false"]);
-            std::fs::write(origin.join("file.txt"), *name).expect("a file to commit");
-            git(&origin, &["add", "."]);
-            git(&origin, &["commit", "--quiet", "--message", "first"]);
-
-            let destination = root.path().join(place);
-            std::fs::create_dir_all(destination.parent().expect("a parent")).expect("the tree");
-
-            assert!(
-                Command::new("git")
-                    .args(["clone", "--quiet"])
-                    .arg(&origin)
-                    .arg(&destination)
-                    .status()
-                    .expect("git")
-                    .success()
-            );
-
-            git(
-                &destination,
-                &[
-                    "remote",
-                    "set-url",
-                    "origin",
-                    &format!("https://github.com/mcanouil/{name}.git"),
-                ],
-            );
+            tree.clone_into_place(name, place);
         }
 
-        Self {
-            _origins: origins,
-            root,
-        }
+        tree
+    }
+
+    /// Clones a fresh repository into `place` beneath the tree.
+    fn clone_into_place(&self, name: &str, place: &str) {
+        let origin = self.origins.path().join(name);
+        std::fs::create_dir_all(&origin).expect("the origin directory");
+        git(&origin, &["init", "--initial-branch=main", "--quiet"]);
+        git(&origin, &["config", "user.name", "Test"]);
+        git(&origin, &["config", "user.email", "test@example.com"]);
+        git(&origin, &["config", "commit.gpgsign", "false"]);
+        std::fs::write(origin.join("file.txt"), name).expect("a file to commit");
+        git(&origin, &["add", "."]);
+        git(&origin, &["commit", "--quiet", "--message", "first"]);
+
+        let destination = self.path().join(place);
+        std::fs::create_dir_all(destination.parent().expect("a parent")).expect("the tree");
+
+        assert!(
+            Command::new("git")
+                .args(["clone", "--quiet"])
+                .arg(&origin)
+                .arg(&destination)
+                .status()
+                .expect("git")
+                .success()
+        );
+
+        git(
+            &destination,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                &format!("https://github.com/mcanouil/{name}.git"),
+            ],
+        );
     }
 
     fn path(&self) -> &Path {
@@ -219,37 +223,7 @@ fn a_clone_that_is_not_recorded_is_reported_and_then_recorded() {
     let tree = Tree::with(&[("minato", "apps/minato")]);
     let manifest = tree.recorded();
 
-    let origins = tempfile::tempdir().expect("a directory for the origin");
-    let origin = origins.path().join("brand");
-    std::fs::create_dir_all(&origin).expect("the origin directory");
-    git(&origin, &["init", "--initial-branch=main", "--quiet"]);
-    git(&origin, &["config", "user.name", "Test"]);
-    git(&origin, &["config", "user.email", "test@example.com"]);
-    git(&origin, &["config", "commit.gpgsign", "false"]);
-    std::fs::write(origin.join("file.txt"), "brand").expect("a file to commit");
-    git(&origin, &["add", "."]);
-    git(&origin, &["commit", "--quiet", "--message", "first"]);
-
-    let destination = tree.path().join("quarto").join("brand");
-    std::fs::create_dir_all(destination.parent().expect("a parent")).expect("the tree");
-    assert!(
-        Command::new("git")
-            .args(["clone", "--quiet"])
-            .arg(&origin)
-            .arg(&destination)
-            .status()
-            .expect("git")
-            .success()
-    );
-    git(
-        &destination,
-        &[
-            "remote",
-            "set-url",
-            "origin",
-            "https://github.com/mcanouil/brand.git",
-        ],
-    );
+    tree.clone_into_place("brand", "quarto/brand");
 
     let plan = manifest.diff(tree.path(), &tree.scanned());
 

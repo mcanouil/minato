@@ -363,6 +363,16 @@ impl ManifestCommand {
         }
     }
 
+    /// The command as it is typed, for a message naming it.
+    const fn typed_as(&self) -> &'static str {
+        match self {
+            Self::Write { .. } => "manifest write",
+            Self::Apply { .. } => "manifest apply",
+            Self::Diff { .. } => "manifest diff",
+            Self::Forget { .. } => "manifest forget",
+        }
+    }
+
     /// What this command makes of a directory holding no manifest.
     const fn unrecorded_tree(&self) -> Unrecorded {
         match self {
@@ -686,7 +696,7 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
 
     // A tree that keeps a record of itself keeps it up to date without being
     // asked again, so a clone lands in the manifest the way it lands on disk.
-    let notes = record_in_manifests(&summary);
+    let summary = recording(summary);
 
     let mut output = summary_output(cli.json, &summary)?;
 
@@ -694,7 +704,6 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
     // uncloned with no hint why, so the scan's notes travel with the result.
     if !cli.json {
         append_scan_notes(&mut output.text, &scanned);
-        append_manifest_notes(&mut output.text, &notes);
     }
 
     Ok(output)
@@ -875,23 +884,35 @@ async fn move_one(
 
     // Where a repository sits is exactly what a manifest records, so a move is
     // followed into the record of the tree it happened in.
-    let notes = record_in_manifests(&actions::Summary {
-        reports: vec![report.clone()],
+    let summary = recording(actions::Summary {
+        reports: vec![report],
     });
+    let failed = summary.has_failures();
+    let (moved, records) = summary
+        .reports
+        .split_first()
+        .expect("the move that was just made to be reported");
 
     if cli.json {
-        return Ok(serde_json::to_string_pretty(&report)?.into());
+        return Ok(Output {
+            text: serde_json::to_string_pretty(moved)?,
+            failed,
+        });
     }
 
-    let mut out = match &report.outcome {
+    let mut text = match &moved.outcome {
         actions::Outcome::Would { detail } => format!("Would {detail}."),
         actions::Outcome::Done { detail } => format!("Did {detail}."),
         other => format!("{other:?}"),
     };
 
-    append_manifest_notes(&mut out, &notes);
+    for record in records {
+        if let actions::Outcome::Failed { error } = &record.outcome {
+            let _ = write!(text, "\n{error}");
+        }
+    }
 
-    Ok(out.into())
+    Ok(Output { text, failed })
 }
 
 /// Records where clones sit, and restores a tree from that record.
@@ -1039,6 +1060,16 @@ fn scan_tree(root: &Path) -> scan::Scan {
     )
 }
 
+/// The manifest of a tree that is meant to have one.
+///
+/// Everything but `write` acts on what is recorded, so a tree with no record is
+/// told to be recorded first rather than answered with an empty one.
+fn recorded_tree(root: &Path) -> Result<Manifest, CliError> {
+    Manifest::load(root)?.ok_or_else(|| CliError::NoManifest {
+        root: root.to_owned(),
+    })
+}
+
 /// Records every clone found in the tree, keeping what is recorded elsewhere.
 fn manifest_write(as_json: bool, root: &Path) -> Result<Output, CliError> {
     let scanned = scan_tree(root);
@@ -1080,12 +1111,7 @@ fn manifest_apply(
     shallow: bool,
     mode: Mode,
 ) -> Result<Output, CliError> {
-    let Some(manifest) = Manifest::load(root)? else {
-        return Err(CliError::NoManifest {
-            root: root.to_owned(),
-        });
-    };
-
+    let manifest = recorded_tree(root)?;
     let scanned = scan_tree(root);
     let plan = manifest.diff(root, &scanned.repositories);
     let protocol = clone_protocol(config);
@@ -1144,12 +1170,7 @@ fn manifest_apply(
 
 /// Reports how the manifest and the tree disagree.
 fn manifest_diff(as_json: bool, root: &Path) -> Result<Output, CliError> {
-    let Some(manifest) = Manifest::load(root)? else {
-        return Err(CliError::NoManifest {
-            root: root.to_owned(),
-        });
-    };
-
+    let manifest = recorded_tree(root)?;
     let scanned = scan_tree(root);
     let plan = manifest.diff(root, &scanned.repositories);
 
@@ -1174,12 +1195,7 @@ fn manifest_diff(as_json: bool, root: &Path) -> Result<Output, CliError> {
 
 /// Stops recording one repository, leaving its clone alone.
 fn manifest_forget(as_json: bool, root: &Path, repository: &str) -> Result<Output, CliError> {
-    let Some(mut manifest) = Manifest::load(root)? else {
-        return Err(CliError::NoManifest {
-            root: root.to_owned(),
-        });
-    };
-
+    let mut manifest = recorded_tree(root)?;
     let forgotten = manifest.forget(repository);
 
     if forgotten.is_empty() {
@@ -1253,6 +1269,27 @@ fn render_plan(root: &Path, plan: &manifest::Plan) -> String {
     table.to_string()
 }
 
+/// Records what an action did, and reports a record that could not be written.
+///
+/// Every caller of an action goes through this, the browser included, so a tree
+/// that keeps a record of itself keeps it whichever way a clone or a move was
+/// asked for. A failure to write it becomes a report of its own rather than a
+/// note on the side, so it survives `--json` and reaches the exit code: what
+/// happened on disk has happened, and losing the record of it is worth saying.
+fn recording(mut summary: actions::Summary) -> actions::Summary {
+    for error in record_in_manifests(&summary) {
+        summary.reports.push(actions::Report {
+            id: None,
+            path: None,
+            outcome: actions::Outcome::Failed {
+                error: error.to_string(),
+            },
+        });
+    }
+
+    summary
+}
+
 /// Records what an action did in the manifest of the tree it happened in.
 ///
 /// A manifest is amended only where one already exists: recording a tree is
@@ -1304,13 +1341,6 @@ fn record_in_manifests(summary: &actions::Summary) -> Vec<manifest::ManifestErro
     errors
 }
 
-/// Appends what recording an action in a manifest failed to do.
-fn append_manifest_notes(out: &mut String, errors: &[manifest::ManifestError]) {
-    for error in errors {
-        let _ = write!(out, "\nthe manifest was not updated: {error}");
-    }
-}
-
 /// Opens the interactive browser over the same comparison the commands use.
 async fn tui(cli: &Cli) -> Result<Output, CliError> {
     let paths = paths()?;
@@ -1357,13 +1387,13 @@ async fn tui(cli: &Cli) -> Result<Output, CliError> {
                 };
 
                 match clone_destination(&roots, root, None, group.as_deref()) {
-                    Ok(destination) => actions::clone_missing(
+                    Ok(destination) => recording(actions::clone_missing(
                         &selection,
                         &destination,
                         &config.local,
                         false,
                         Mode::Execute,
-                    ),
+                    )),
                     Err(error) => skipped(error.to_string()),
                 }
             }
