@@ -282,9 +282,9 @@ pub enum Command {
 ///
 /// Each takes the tree to work on the same way: the directory named on the
 /// command line, else the nearest one at or above the current directory holding
-/// a manifest, else every configured root. None of them asks a provider
-/// anything, so a machine with no configuration and no token can still restore
-/// a tree it has synced.
+/// a manifest, else the configured root when exactly one is configured, else the
+/// current directory. None of them asks a provider anything, so a machine with
+/// no configuration and no token can still restore a tree it has synced.
 #[derive(Debug, Subcommand)]
 pub enum ManifestCommand {
     /// Record every clone found in the tree, creating the manifest if needed.
@@ -652,6 +652,13 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
         &gathered.tracked,
     ));
 
+    // Only a clone puts a repository somewhere it was not, so only a clone
+    // changes what a manifest records. Fetching and updating leave every path
+    // exactly as it was, and must not write the record back: doing so would put
+    // back an entry `minato manifest forget` was asked to drop, and would
+    // rewrite a file inside a synced directory on a command that reads.
+    let places_a_clone = matches!(action, Act::Clone { .. });
+
     let summary = match action {
         Act::Clone {
             into,
@@ -676,7 +683,11 @@ async fn act(cli: &Cli, action: Act, mode: Mode) -> Result<Output, CliError> {
 
     // A tree that keeps a record of itself keeps it up to date without being
     // asked again, so a clone lands in the manifest the way it lands on disk.
-    let summary = recording(summary);
+    let summary = if places_a_clone {
+        recording(summary)
+    } else {
+        summary
+    };
 
     let mut output = summary_output(cli.json, &summary)?;
 
@@ -867,18 +878,18 @@ async fn move_one(
     let summary = recording(actions::Summary {
         reports: vec![report],
     });
+    // As JSON this is a summary like every other action, so a record that could
+    // not be written is in the answer rather than only in the exit code. As a
+    // table it stays the sentence it always was, with anything else said after.
+    if cli.json {
+        return summary_output(true, &summary);
+    }
+
     let failed = summary.has_failures();
     let (moved, records) = summary
         .reports
         .split_first()
         .expect("the move that was just made to be reported");
-
-    if cli.json {
-        return Ok(Output {
-            text: serde_json::to_string_pretty(moved)?,
-            failed,
-        });
-    }
 
     let mut text = match &moved.outcome {
         actions::Outcome::Would { detail } => format!("Would {detail}."),
@@ -1010,7 +1021,16 @@ fn scanning_roots(config: &Config, home: Option<&Path>) -> Result<ResolvedRoots,
         return Ok(configured);
     };
 
-    if configured.iter().any(|root| found.starts_with(root)) {
+    // Overlap either way is left alone. A tree inside a configured root is
+    // already scanned, and a tree holding one would be the shallower of the two
+    // roots a clone sits under, which is the one a group is measured from: every
+    // clone beneath it would change group depending on where the command was
+    // run from.
+    let overlaps = configured
+        .iter()
+        .any(|root| found.starts_with(root) || root.starts_with(&found));
+
+    if overlaps {
         return Ok(configured);
     }
 
@@ -1157,15 +1177,33 @@ fn manifest_diff(as_json: bool, root: &Path) -> Result<Output, CliError> {
 /// Stops recording one repository, leaving its clone alone.
 fn manifest_forget(as_json: bool, root: &Path, repository: &str) -> Result<Output, CliError> {
     let mut manifest = recorded_tree(root)?;
-    let forgotten = manifest.forget(repository);
 
-    if forgotten.is_empty() {
-        return Err(actions::MoveError::NoMatch {
-            wanted: repository.to_owned(),
+    // A bare name can name more than one repository, and dropping the wrong one
+    // from a record shared between machines is worse than being asked which was
+    // meant, which is the rule `minato move` already follows.
+    match manifest.matching(repository).as_slice() {
+        [] => {
+            return Err(actions::MoveError::NoMatch {
+                wanted: repository.to_owned(),
+            }
+            .into());
         }
-        .into());
+        [_] => {}
+        several => {
+            return Err(actions::MoveError::Ambiguous {
+                wanted: repository.to_owned(),
+                count: several.len(),
+                matches: several
+                    .iter()
+                    .map(|entry| entry.id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            }
+            .into());
+        }
     }
 
+    let forgotten = manifest.forget(repository);
     manifest.save(root)?;
 
     if as_json {

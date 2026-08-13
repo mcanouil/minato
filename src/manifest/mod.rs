@@ -101,7 +101,11 @@ impl RelativePath {
             });
         }
 
-        if path.starts_with('/') {
+        // A leading `/` is absolute everywhere, and a `:` anywhere makes the
+        // first segment a Windows drive: joining `C:/Windows` onto a root
+        // discards the root entirely on that platform, so both are refused
+        // rather than trusted to a `join`.
+        if path.starts_with('/') || path.contains(':') {
             return Err(InvalidPathError::Absolute {
                 path: path.to_owned(),
             });
@@ -130,8 +134,8 @@ impl RelativePath {
 
         let joined = relative
             .components()
-            .map(|component| component.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
+            .map(|component| component.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()?
             .join("/");
 
         Self::new(&joined).ok()
@@ -426,18 +430,40 @@ impl Manifest {
     ///
     /// Nothing is removed. An entry whose clone is not on this machine is left
     /// alone, since the machine that holds it records the same file.
+    ///
+    /// One repository can be cloned twice in a tree, and only one of those
+    /// places can be recorded. An entry already pointing at one of them is left
+    /// where it is rather than made to follow whichever copy was walked last,
+    /// so writing a tree twice does not move a correct entry onto a stale copy.
     pub fn merge(&mut self, root: &Path, scanned: &[LocalRepo]) {
-        for local in scanned {
-            let Some(id) = local.id.clone() else {
-                continue;
-            };
+        for (id, places) in places_by_id(root, scanned) {
+            let already_right = self
+                .entry(id)
+                .is_some_and(|entry| places.contains(&entry.path));
 
-            let Some(path) = RelativePath::between(root, &local.path) else {
+            if already_right {
                 continue;
-            };
+            }
 
-            self.record(id, path);
+            if let Some(place) = places.into_iter().next() {
+                self.record(id.clone(), place);
+            }
         }
+    }
+
+    /// The entries someone naming `wanted` could mean.
+    ///
+    /// Naming follows the same rules as anywhere else: a full identity,
+    /// `owner/name`, or a bare name. A bare name can match more than one
+    /// repository, which is why this reports every match rather than a first
+    /// one: dropping the wrong repository from a record shared between machines
+    /// is not something to guess at.
+    #[must_use]
+    pub fn matching(&self, wanted: &str) -> Vec<&Entry> {
+        self.repositories
+            .iter()
+            .filter(|entry| entry.id.is_named(wanted))
+            .collect()
     }
 
     /// Removes every entry for `wanted`, and reports what was removed.
@@ -455,13 +481,13 @@ impl Manifest {
     }
 
     /// Compares the manifest against what a scan found beneath `root`.
+    ///
+    /// A repository cloned twice in one tree is in place as soon as one of its
+    /// clones sits where the manifest records it: the other copy is something
+    /// the tree holds, not drift to report.
     #[must_use]
     pub fn diff(&self, root: &Path, scanned: &[LocalRepo]) -> Plan {
-        let found: BTreeMap<&RepoId, &LocalRepo> = scanned
-            .iter()
-            .filter(|local| local.path.starts_with(root))
-            .filter_map(|local| local.id.as_ref().map(|id| (id, local)))
-            .collect();
+        let found = places_by_id(root, scanned);
 
         let mut recorded = BTreeSet::new();
         let mut missing = Vec::new();
@@ -470,15 +496,19 @@ impl Manifest {
         for entry in &self.repositories {
             recorded.insert(&entry.id);
 
-            let Some(local) = found.get(&entry.id) else {
+            let Some(places) = found.get(&entry.id) else {
                 missing.push(entry.clone());
                 continue;
             };
 
-            if RelativePath::between(root, &local.path).as_ref() != Some(&entry.path) {
+            if places.contains(&entry.path) {
+                continue;
+            }
+
+            if let Some(place) = places.first() {
                 misplaced.push(Misplaced {
                     entry: entry.clone(),
-                    found: local.path.clone(),
+                    found: place.to_path(root),
                 });
             }
         }
@@ -486,10 +516,10 @@ impl Manifest {
         let unrecorded = found
             .iter()
             .filter(|(id, _)| !recorded.contains(*id))
-            .filter_map(|(id, local)| {
-                RelativePath::between(root, &local.path).map(|path| Entry {
+            .filter_map(|(id, places)| {
+                places.first().map(|place| Entry {
                     id: (*id).clone(),
-                    path,
+                    path: place.clone(),
                 })
             })
             .collect();
@@ -537,6 +567,36 @@ pub struct Misplaced {
 
     /// Where the clone actually is.
     pub found: PathBuf,
+}
+
+/// Every place a repository is cloned beneath `root`, keyed by its identity.
+///
+/// A repository can be cloned more than once in one tree, so each identity
+/// carries every place it was found, sorted, rather than whichever one a walk
+/// happened to reach last.
+fn places_by_id<'a>(
+    root: &Path,
+    scanned: &'a [LocalRepo],
+) -> BTreeMap<&'a RepoId, Vec<RelativePath>> {
+    let mut places: BTreeMap<&RepoId, Vec<RelativePath>> = BTreeMap::new();
+
+    for local in scanned {
+        let Some(id) = local.id.as_ref() else {
+            continue;
+        };
+
+        let Some(place) = RelativePath::between(root, &local.path) else {
+            continue;
+        };
+
+        places.entry(id).or_default().push(place);
+    }
+
+    for found in places.values_mut() {
+        found.sort();
+    }
+
+    places
 }
 
 /// The nearest root at or above `start`, meaning the nearest manifest.
@@ -672,6 +732,8 @@ mod tests {
             "apps/../..",
             "apps//minato",
             "apps\\minato",
+            "C:/Windows",
+            "apps/C:/Windows",
             "",
         ] {
             assert!(
@@ -833,6 +895,52 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["brand"],
             "a clone outside the root belongs to another tree and is not reported here"
+        );
+    }
+
+    #[test]
+    fn a_repository_cloned_twice_is_in_place_when_either_clone_is() {
+        let manifest = manifest(vec![entry("minato", "apps/minato")]);
+        let scanned = [
+            local(Some("minato"), "/code/apps/minato"),
+            local(Some("minato"), "/code/old/minato"),
+        ];
+
+        let plan = manifest.diff(Path::new("/code"), &scanned);
+
+        assert!(
+            plan.is_empty(),
+            "the recorded place holds a clone, so there is nothing to restore or report: {plan:?}"
+        );
+
+        let mut written = manifest.clone();
+        written.merge(Path::new("/code"), &scanned);
+
+        assert_eq!(
+            written, manifest,
+            "and writing leaves the correct entry rather than following the other copy"
+        );
+    }
+
+    #[test]
+    fn every_way_of_naming_a_repository_reports_what_it_could_mean() {
+        let manifest = manifest(vec![
+            entry("minato", "apps/minato"),
+            Entry {
+                id: RepoId::new(Provider::GitHub, "other", "minato"),
+                path: RelativePath::new("other/minato").expect("the fixture path to be valid"),
+            },
+        ]);
+
+        assert_eq!(
+            manifest.matching("minato").len(),
+            2,
+            "a bare name can mean either, which is for the caller to refuse"
+        );
+        assert_eq!(
+            manifest.matching("mcanouil/minato").len(),
+            1,
+            "an owner names one of them"
         );
     }
 
