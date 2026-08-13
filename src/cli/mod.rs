@@ -1276,10 +1276,26 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
         return Ok(serde_json::to_string_pretty(&comparisons)?);
     }
 
-    let mut table = Table::new(["REPOSITORY", "GROUP", "STATE", "NOTES", "PATH"]);
+    let table = status_table(&comparisons);
 
-    for comparison in &comparisons {
+    let mut out = finish(&table, gathered.staleness, "repositories");
+
+    append_scan_notes(&mut out, &scanned);
+
+    Ok(out)
+}
+
+/// Lays out the status table, leading with where a clone sits on disk since
+/// that is what a reader locates a row by, then what it is and how it stands.
+fn status_table(comparisons: &[Comparison]) -> Table {
+    let mut table = Table::new(["PATH", "REPOSITORY", "GROUP", "STATE", "NOTES"]);
+
+    for comparison in comparisons {
         table.push([
+            comparison
+                .path
+                .as_ref()
+                .map_or_else(|| "-".to_owned(), |path| path.display().to_string()),
             comparison
                 .id
                 .as_ref()
@@ -1287,18 +1303,10 @@ async fn status(cli: &Cli) -> Result<String, CliError> {
             comparison.group.clone().unwrap_or_else(|| "-".to_owned()),
             describe_state(&comparison.state),
             describe_notes(comparison),
-            comparison
-                .path
-                .as_ref()
-                .map_or_else(String::new, |path| path.display().to_string()),
         ]);
     }
 
-    let mut out = finish(&table, gathered.staleness, "repositories");
-
-    append_scan_notes(&mut out, &scanned);
-
-    Ok(out)
+    table
 }
 
 /// Appends the roots a scan did not read, and the paths it deliberately
@@ -1761,6 +1769,55 @@ mod tests {
         assert!(
             out.contains("/root/mirror.git"),
             "a skipped bare repository is named: {out}"
+        );
+    }
+
+    #[test]
+    fn the_status_table_leads_with_the_path_and_marks_a_missing_one() {
+        use crate::model::RepoId;
+
+        let rendered = status_table(&[
+            Comparison {
+                id: Some(RepoId::new(Provider::GitHub, "mcanouil", "minato")),
+                path: Some(PathBuf::from("/code/apps/minato")),
+                group: Some("apps".to_owned()),
+                state: State::InSync,
+                upstream: None,
+                local: None,
+                remote: None,
+            },
+            Comparison {
+                id: Some(RepoId::new(Provider::GitHub, "mcanouil", "uncloned")),
+                path: None,
+                group: None,
+                state: State::RemoteOnly,
+                upstream: None,
+                local: None,
+                remote: None,
+            },
+        ])
+        .to_string();
+
+        let mut lines = rendered.lines();
+        let header = lines.next().expect("a header line");
+
+        assert_eq!(
+            header.split_whitespace().collect::<Vec<_>>(),
+            ["PATH", "REPOSITORY", "GROUP", "STATE", "NOTES"]
+        );
+
+        let cloned = lines.next().expect("the row for the clone");
+
+        assert!(
+            cloned.starts_with("/code/apps/minato"),
+            "the path opens the row: {cloned}"
+        );
+
+        let uncloned = lines.next().expect("the row for the uncloned repository");
+
+        assert!(
+            uncloned.starts_with('-'),
+            "an absent path is marked rather than left blank: {uncloned}"
         );
     }
 

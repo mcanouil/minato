@@ -47,10 +47,10 @@ minato status --state drifted
 ```
 
 ```{.default filename="Output"}
-REPOSITORY                     GROUP        STATE                         NOTES
-github:mcanouil/quarto-cli     quarto-dev   in sync                       fork, 135 behind upstream
-github:mcanouil/imdb-ratings   perso        behind 2
-github:mcanouil/game-night     perso        local only, gone from GitHub
+PATH                                       REPOSITORY                    GROUP       STATE                         NOTES
+/Users/you/Projects/perso/game-night       github:mcanouil/game-night    perso       local only, gone from GitHub
+/Users/you/Projects/perso/imdb-ratings     github:mcanouil/imdb-ratings  perso       behind 2
+/Users/you/Projects/quarto-dev/quarto-cli  github:mcanouil/quarto-cli    quarto-dev  in sync                       fork, 135 behind upstream
 ```
 
 ## What it does about it

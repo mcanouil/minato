@@ -258,6 +258,12 @@ fn draw(frame: &mut Frame, app: &App) {
             Row::new(vec![
                 Cell::from(
                     comparison
+                        .path
+                        .as_ref()
+                        .map_or_else(|| "-".to_owned(), |path| path.display().to_string()),
+                ),
+                Cell::from(
+                    comparison
                         .id
                         .as_ref()
                         .map_or_else(|| "-".to_owned(), ToString::to_string),
@@ -272,14 +278,15 @@ fn draw(frame: &mut Frame, app: &App) {
     let table = Table::new(
         rows,
         [
-            Constraint::Percentage(45),
-            Constraint::Percentage(15),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
+            Constraint::Percentage(30),
+            Constraint::Percentage(26),
+            Constraint::Percentage(10),
+            Constraint::Percentage(17),
+            Constraint::Percentage(17),
         ],
     )
     .header(
-        Row::new(["REPOSITORY", "GROUP", "STATE", "NOTES"])
+        Row::new(["PATH", "REPOSITORY", "GROUP", "STATE", "NOTES"])
             .style(Style::default().add_modifier(Modifier::BOLD)),
     )
     .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED))
@@ -461,6 +468,26 @@ mod rendering {
         assert!(rendered.contains("not backed up"), "{rendered}");
         assert!(rendered.contains("perso"), "{rendered}");
         assert!(rendered.contains("dirty"), "{rendered}");
+    }
+
+    #[test]
+    fn the_columns_lead_with_the_path_like_the_command_line_does() {
+        let rendered = screen(&App::new(rows()));
+
+        let header = rendered
+            .lines()
+            .find(|line| line.contains("REPOSITORY"))
+            .expect("a header line");
+
+        assert_eq!(
+            header.split_whitespace().collect::<Vec<_>>(),
+            ["PATH", "REPOSITORY", "GROUP", "STATE", "NOTES"]
+        );
+
+        assert!(
+            rendered.contains("/code/perso/minato"),
+            "a clone shows where it sits: {rendered}"
+        );
     }
 
     #[test]
