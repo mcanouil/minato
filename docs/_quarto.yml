@@ -16,6 +16,7 @@ website:
   description: "Overview and sync of Git repositories across hosting providers."
   site-url: &site-url "https://m.canouil.dev/minato"
   repo-url: "https://github.com/mcanouil/minato"
+  repo-subdir: docs
   favicon: favicon.ico
   image: /assets/images/og-image.png
   image-alt: &image-alt >-
