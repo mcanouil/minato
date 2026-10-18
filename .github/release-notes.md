@@ -6,7 +6,7 @@
 curl -fsSL https://m.canouil.dev/minato/install.sh | bash
 
 # or pin this exact release
-curl -fsSL https://m.canouil.dev/minato/install.sh | bash -s -- --version %%VERSION%%
+curl -fsSL https://m.canouil.dev/minato/install.sh | bash -s -- --version {version}
 ```
 
 The script picks the archive for your machine, verifies it against `SHA256SUMS`, and installs into `/usr/local/bin` when writable, otherwise `~/.local/bin`.
@@ -19,7 +19,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://m.canouil.dev/minato/install.
 
 # or pin this exact release; `irm | iex` cannot be given an argument, so run the
 # script as a script block instead, from a PowerShell prompt
-&([scriptblock]::Create((irm https://m.canouil.dev/minato/install.ps1))) -Version %%VERSION%%
+&([scriptblock]::Create((irm https://m.canouil.dev/minato/install.ps1))) -Version {version}
 ```
 
 It installs into `%LOCALAPPDATA%\Programs\minato` and adds that directory to your user `PATH`, so no administrator rights are needed.
@@ -30,7 +30,7 @@ It runs on Windows PowerShell 5.1 as well as PowerShell 7.
 Pick the archive for your machine from the table below, then:
 
 ```bash
-VERSION=%%VERSION%%
+VERSION={version}
 TARGET=x86_64-unknown-linux-musl   # or whichever row matches
 
 curl -fsSLO "https://github.com/mcanouil/minato/releases/download/${VERSION}/minato-${VERSION}-${TARGET}.tar.gz"
@@ -49,7 +49,7 @@ On Windows, the script above does all of this for you. To do it by hand, unzip t
 ### With Rust already installed
 
 ```bash
-cargo install --git https://github.com/mcanouil/minato --tag %%VERSION%%
+cargo install --git https://github.com/mcanouil/minato --tag {version}
 ```
 
 ### From source
@@ -85,7 +85,7 @@ Where each shell looks for it is at <https://m.canouil.dev/minato/get-started/#e
 Beyond the checksum, every archive carries build provenance, so you can confirm it came from this repository's workflow and not from somewhere else:
 
 ```bash
-gh attestation verify "minato-%%VERSION%%-x86_64-unknown-linux-musl.tar.gz" \
+gh attestation verify "minato-{version}-x86_64-unknown-linux-musl.tar.gz" \
   --repo mcanouil/minato
 ```
 
@@ -93,12 +93,12 @@ gh attestation verify "minato-%%VERSION%%-x86_64-unknown-linux-musl.tar.gz" \
 
 | Archive | For |
 | --- | --- |
-| `minato-%%VERSION%%-x86_64-unknown-linux-musl.tar.gz` | Linux on Intel or AMD, any distribution. |
-| `minato-%%VERSION%%-aarch64-unknown-linux-musl.tar.gz` | Linux on ARM, including most cloud instances. |
-| `minato-%%VERSION%%-aarch64-apple-darwin.tar.gz` | macOS on Apple silicon. |
-| `minato-%%VERSION%%-x86_64-apple-darwin.tar.gz` | macOS on Intel. |
-| `minato-%%VERSION%%-x86_64-pc-windows-msvc.zip` | Windows on Intel or AMD. |
-| `minato-%%VERSION%%-aarch64-pc-windows-msvc.zip` | Windows on ARM. |
+| `minato-{version}-x86_64-unknown-linux-musl.tar.gz` | Linux on Intel or AMD, any distribution. |
+| `minato-{version}-aarch64-unknown-linux-musl.tar.gz` | Linux on ARM, including most cloud instances. |
+| `minato-{version}-aarch64-apple-darwin.tar.gz` | macOS on Apple silicon. |
+| `minato-{version}-x86_64-apple-darwin.tar.gz` | macOS on Intel. |
+| `minato-{version}-x86_64-pc-windows-msvc.zip` | Windows on Intel or AMD. |
+| `minato-{version}-aarch64-pc-windows-msvc.zip` | Windows on ARM. |
 
 ## Documentation
 
