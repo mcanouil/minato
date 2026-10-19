@@ -898,7 +898,7 @@ mod tests {
 
         assert_eq!(plan.location.path, home.path().join(".zfunc/_minato"));
         assert!(plan.existing);
-        assert!(plan.stale.is_empty());
+        assert_eq!(plan.stale, Vec::<PathBuf>::new());
     }
 
     /// Two copies is what an install followed by a hand install leaves. The

@@ -223,7 +223,10 @@ mod tests {
     fn forks_are_hidden_by_default_and_shown_when_included() {
         let it = vec![fork("mcanouil", State::InSync)];
 
-        assert!(Filter::default().apply(it.clone()).is_empty());
+        assert_eq!(
+            Filter::default().apply(it.clone()),
+            Vec::<Comparison>::new()
+        );
 
         let including = Filter {
             include_forks: true,
@@ -236,7 +239,7 @@ mod tests {
     fn a_fork_that_is_also_behind_is_still_hidden() {
         let it = vec![fork("mcanouil", State::Behind { behind: 3 })];
 
-        assert!(Filter::default().apply(it).is_empty());
+        assert_eq!(Filter::default().apply(it), Vec::<Comparison>::new());
     }
 
     #[test]
@@ -247,7 +250,10 @@ mod tests {
             State::LocalOnly(LocalOnlyReason::OwnerNotTracked),
         )];
 
-        assert!(Filter::default().apply(it.clone()).is_empty());
+        assert_eq!(
+            Filter::default().apply(it.clone()),
+            Vec::<Comparison>::new()
+        );
 
         let including = Filter {
             include_external: true,

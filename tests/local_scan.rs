@@ -338,7 +338,7 @@ fn finds_clones_nested_under_a_layout() {
     );
 
     assert_eq!(found.repositories.len(), 2);
-    assert!(found.failures.is_empty());
+    assert_eq!(found.failures, Vec::<scan::ScanError>::new());
 }
 
 #[test]
@@ -414,7 +414,7 @@ fn stops_at_the_depth_limit() {
 fn reports_a_root_that_does_not_exist_rather_than_finding_nothing() {
     let found = scan::scan(&roots(vec![PathBuf::from("/nonexistent/root")]), 2);
 
-    assert!(found.repositories.is_empty());
+    assert_eq!(found.repositories, Vec::<scan::LocalRepo>::new());
     assert_eq!(
         found.failures.len(),
         1,
