@@ -28,3 +28,11 @@ updates:
       cargo:
         patterns:
           - "*"
+
+  - package-ecosystem: "rust-toolchain"
+    directory: "/"
+    schedule:
+      interval: "cron"
+      cronjob: "00 12 1 * *"
+    labels:
+      - "Type: Dependencies :arrow_up:"
