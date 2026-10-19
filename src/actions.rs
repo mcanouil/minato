@@ -827,7 +827,7 @@ mod tests {
     fn a_repository_that_was_never_cloned_is_not_a_candidate_for_updating() {
         let summary = update_all(&[comparison(State::RemoteOnly, None)], Mode::Execute);
 
-        assert!(summary.reports.is_empty());
+        assert_eq!(summary.reports, Vec::<Report>::new());
     }
 
     #[test]

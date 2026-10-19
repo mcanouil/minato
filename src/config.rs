@@ -501,7 +501,7 @@ reference = ["github:mcanouil/minato"]
         assert_eq!(config.local.layout, DEFAULT_LAYOUT);
         assert_eq!(config.local.protocol, Protocol::Ssh);
         assert!(config.tags.is_empty());
-        assert!(config.providers.github.unwrap().orgs.is_empty());
+        assert_eq!(config.providers.github.unwrap().orgs, Vec::<String>::new());
         assert_eq!(config.cache.ttl, crate::cache::DEFAULT_TTL);
     }
 
