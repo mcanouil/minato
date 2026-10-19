@@ -41,9 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - run: rustup toolchain install
 
       - uses: Swatinem/rust-cache@v2
 
@@ -148,9 +146,11 @@ jobs:
         with:
           ref: ${{ needs.bump-version.outputs.commit_sha }}
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      - name: Install the toolchain
+        shell: bash
+        run: |
+          rustup toolchain install
+          rustup target add ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:

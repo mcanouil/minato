@@ -37,9 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - run: rustup toolchain install
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -70,7 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup toolchain install
 
       - uses: Swatinem/rust-cache@v2
         with:

@@ -18,6 +18,10 @@ cargo clippy --locked --all-targets
 cargo test --locked
 ```
 
+[`rust-toolchain.toml`](rust-toolchain.toml) pins the Rust version that CI uses, and `rustup` installs that version for you when you run the commands.
+Update the pin with a pull request, so that new lints come in with their fixes.
+The `rust-version` field in `Cargo.toml` stays the minimum version for people who install Minato.
+
 Tests that reach the network are marked `#[ignore]`, so the default run stays offline and deterministic.
 Run them with `cargo test -- --ignored` after `gh auth login`, which checks the GraphQL query against the real API rather than only against a mock.
 
